@@ -1,6 +1,8 @@
 # Met à jour la prédiction chaque matin et publie le site sur GitHub Pages.
 # data/ n'est pas versionné : il est conservé d'une exécution à l'autre dans le cache d'Actions.
-# Pipeline complet le lundi, au lancement manuel avec « complet », ou si le cache est vide.
+# Chaque jour : nouvelles observations, météo, prédiction (voir src/mushroam/pipeline.py).
+# Pipeline complet (extractions refaites en entier, modèles réentraînés) le lundi,
+# au lancement manuel avec « complet », ou si le cache est vide.
 # Push touchant le site : pages seules, regénérées à partir des données en cache (environ 1 min).
 name: Site
 
