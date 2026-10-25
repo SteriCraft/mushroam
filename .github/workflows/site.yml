@@ -1,11 +1,17 @@
 # Met à jour la prédiction chaque matin et publie le site sur GitHub Pages.
 # data/ n'est pas versionné : il est conservé d'une exécution à l'autre dans le cache d'Actions.
 # Pipeline complet le lundi, au lancement manuel avec « complet », ou si le cache est vide.
+# Push touchant le site : pages seules, regénérées à partir des données en cache (environ 1 min).
 name: Site
 
 on:
   schedule:
     - cron: "0 8 * * *"  # 8 h UTC, après la mise à jour quotidienne de SIM2
+  push:
+    branches: [main]
+    paths:
+      - "src/mushroam/viz/**"
+      - "config/site.yaml"
   workflow_dispatch:
     inputs:
       complet:
@@ -49,7 +55,14 @@ jobs:
           restore-keys: data-
 
       - name: Pipeline
+        id: pipeline
         run: |
+          if [ "${{ github.event_name }}" = "push" ] && [ -n "${{ steps.cache.outputs.cache-matched-key }}" ]; then
+            echo "Mode : pages seules"
+            echo "mode=pages" >> "$GITHUB_OUTPUT"
+            python -m mushroam.viz.site
+            exit 0
+          fi
           mode=""
           if [ -z "${{ steps.cache.outputs.cache-matched-key }}" ] \
              || [ "${{ inputs.complet }}" = "true" ] || [ "$(date +%u)" = "1" ]; then
@@ -59,8 +72,9 @@ jobs:
           python -m mushroam.pipeline $mode
 
       # Sauvegardé même en cas d'échec, pour ne pas refaire les téléchargements déjà faits.
+      # Pas en mode « pages seules » : les données n'ont pas changé.
       - name: Sauvegarde des données
-        if: always()
+        if: always() && steps.pipeline.outputs.mode != 'pages'
         uses: actions/cache/save@v4
         with:
           path: data

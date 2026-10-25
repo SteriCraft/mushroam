@@ -198,7 +198,7 @@ Paramètres dans `config/sources.yaml`. La carte des observations a une couche (
 ```
 
 ### Publication (GitHub Pages)
-Le workflow `.github/workflows/site.yml` tourne chaque jour à 8 h UTC : mode quotidien de `mushroam.pipeline`, puis publication de `data/outputs/site/` sur GitHub Pages (https://stericraft.github.io/mushroam/). `data/` est gardé d'une exécution à l'autre dans le cache d'Actions (environ 300 Mo). Pipeline complet le lundi, au lancement manuel avec l'option « complet », ou si le cache est vide (premier passage : plus d'une heure).
+Le workflow `.github/workflows/site.yml` tourne chaque jour à 8 h UTC : mode quotidien de `mushroam.pipeline`, puis publication de `data/outputs/site/` sur GitHub Pages (https://stericraft.github.io/mushroam/). `data/` est gardé d'une exécution à l'autre dans le cache d'Actions (environ 300 Mo). Pipeline complet le lundi, au lancement manuel avec l'option « complet », ou si le cache est vide (premier passage : plus d'une heure). Un push sur `main` qui touche `src/mushroam/viz/` ou `config/site.yaml` régénère seulement les pages à partir du cache (environ 1 min).
 
 Les extractions récupèrent **toutes** les Fungi du rayon (tous niveaux de qualité) : fond et cibles viennent de la même requête. `--refresh` retélécharge tout. Sous Windows, préfixer par `PYTHONUTF8=1` si la console affiche mal les accents.
 
