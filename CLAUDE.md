@@ -21,7 +21,10 @@ L'outil est un projet personnel exploratoire. Priorité : une méthode simple, i
 | Cible | Rang | Écologie | Conséquence pour le modèle |
 |---|---|---|---|
 | Coulemelle (*Macrolepiota procera*) | espèce | Saprotrophe. Prairies, lisières, clairières, bords de chemins. | Habitat ouvert ou semi-ouvert, pas lié à une essence d'arbre. |
-| Bolets : Boletaceae + Suillaceae + Gyroporaceae | 3 familles, modélisées ensemble | Ectomycorhiziens. Chênes (vert, pubescent), châtaigniers, hêtres, pins (*Suillus* : pins uniquement). | Habitat forestier, lié aux essences hôtes. Groupe unique (décision : le tri se fait sur le terrain). La famille de chaque observation est conservée (`membre_bolets`) pour une analyse séparée si besoin. |
+| Bolets des feuillus (`bolets_feuillus`) : Boletaceae + Gyroporaceae | 2 familles | Ectomycorhiziens. Chênes (vert, pubescent), châtaigniers, hêtres (quelques Boletaceae sous pins). | Habitat forestier feuillu. Poussée d'été et d'automne, pic 28–35 jours après une pluie ≥ 20 mm. Fenêtre de poussée : 14–40 jours. |
+| Bolets des pins (`bolets_pins`) : Suillaceae | famille | Ectomycorhiziens des pins. | Pinèdes (garrigue, littoral, reboisements). Saison plus tardive (pic en novembre), poussée 21–60 jours après une pluie ≥ 20 mm. Fenêtre : 21–50 jours. |
+
+Les bolets sont séparés en deux cibles (décision d'octobre 2026) : leurs géographies ne sont pas corrélées et leurs saisons diffèrent. Sur le terrain, ils peuvent être cherchés ensemble. La famille de chaque observation reste dans `membre_<cible>`.
 
 Pas de troisième cible.
 
@@ -36,8 +39,8 @@ Espèces partageant le milieu ou les arbres hôtes d'une cible, sans être la ci
 - `pinede` (pour les Suillus) : *Lactarius deliciosus*, *Tricholoma terreum* (≈ 170 obs.).
 
 Évaluation sur nos données (octobre 2026) :
-- **feuillus ↔ Boletaceae** : géographie corrélée (Spearman 0,53 entre mailles), même réponse décalée à la pluie, même poussée d'été. Un témoin vu dans la même maille dans les 10 jours précédents multiplie la part des bolets par 1,5 (IC 1,2–1,9). **Utile.**
-- **pinède ↔ Suillaceae** : géographie corrélée (0,40), même saison tardive (pic en novembre). Pas lié aux Boletaceae. **Utile pour les Suillus seulement.**
+- **feuillus ↔ bolets des feuillus (Boletaceae)** : géographie corrélée (Spearman 0,53 entre mailles), même réponse décalée à la pluie, même poussée d'été. Un témoin vu dans la même maille dans les 10 jours précédents multiplie la part des bolets par 1,5 (IC 1,2–1,9). **Utile.**
+- **pinède ↔ bolets des pins (Suillaceae)** : géographie corrélée (0,40), même saison tardive (pic en novembre). Pas lié aux Boletaceae. **Utile pour les Suillus seulement.**
 - **prairie ↔ coulemelle** : aucune corrélation géographique (0,00), témoins de basse altitude (médiane 180 m contre 640 m), pas de réponse à la pluie. **Peu utile ici.** La coulemelle est corrélée aux témoins de feuillus (0,46) : dans la zone, c'est une espèce de lisière et de clairière (73 % des points précis sous couvert arboré dans WorldCover).
 - **Suillaceae et Boletaceae ne se ressemblent pas** : géographie non corrélée (0,05), saison décalée (Suillus : 36 % en novembre, contre 14 %).
 
@@ -189,7 +192,7 @@ Une ligne par observation datée au jour près, dans le rayon. Colonnes clés : 
      2. *part de la cible* = cible / Fungi, par maille SIM2.
    - **Résultats** (rapports par rapport à la même période de l'année) :
      - Fungi : × 1,5 dans les 7 jours après une pluie ≥ 20 mm, × 1,25 de 7 à 21 jours, × 0,85 au-delà de 35 jours ; × 1,3 si SWI ≥ 0,73 ; × 0,64 si pluie 30 j < 26 mm ; × 0,8 si Tmax 7 j ≥ 27 °C ou Tmin 7 j < 5 °C ;
-     - bolets : poussée **décalée**, part maximale 21 à 35 jours après la pluie (× 1,24) et faible juste après (× 0,87) ; sols plus humides que la normale 15 à 30 jours avant ;
+     - bolets (avant séparation) : poussée **décalée**, part maximale 21 à 35 jours après la pluie (× 1,24) et faible juste après (× 0,87) ; sols plus humides que la normale 15 à 30 jours avant. Après séparation : feuillus plus étalés (pic × 1,32 à 28–35 j), pins très en retrait juste après la pluie (× 0,65) puis × 1,2–1,5 de 21 à 60 jours ;
      - coulemelle : plus précoce, part maximale 7 à 14 jours après la pluie (× 1,42) ; sols plus secs que la normale à J−30 puis remise en eau rapide les 15 derniers jours.
    - Limites : intervalles de confiance approchés et trop étroits (observations groupées par sortie) ; météo de la zone moyennée pour le niveau 1.
 5. Premier modèle par analogues (couche temporelle seule), avec validation par saison mise de côté. Conséquences de l'étape 4 : garder les deux niveaux (activité des Fungi corrigée de l'effort × part de la cible) ; la fenêtre de 0 à 21 jours après l'analogue est trop courte pour les bolets (pic à 3–5 semaines) : la rendre propre à chaque cible.
@@ -198,9 +201,10 @@ Une ligne par observation datée au jour près, dans le rayon. Colonnes clés : 
 
 ## Questions ouvertes
 
-- Bolets : modéliser séparément les bolets des feuillus (Boletaceae + Gyroporaceae) et les bolets des pins (Suillaceae), vu leurs différences de géographie et de saison ?
+- Aucune pour l'instant.
 
 Décisions prises :
+- Bolets séparés en deux cibles : bolets des feuillus, bolets des pins.
 - Coulemelle : validation en regroupant plusieurs saisons par pli ; fiabilité moindre que pour les bolets, acceptée.
 - Proportions cible / fond calculées par source (iNat, GBIF), puis combinées.
 - Seuil urbain : 30 % de bâti, validé.

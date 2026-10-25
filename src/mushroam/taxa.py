@@ -22,7 +22,8 @@ HEADER = """\
 # fond            : fond de référence (toutes les Fungi).
 # cibles          : espèces ou familles recherchées. fenetre_jours = fenêtre de
 #                   poussée après une situation météo analogue, en jours
-#                   (d'après l'étape 4 : coulemelle 7-14 j, bolets 21-35 j).
+#                   (d'après l'étape 4 : pics à 7-14 j pour la coulemelle,
+#                   28-35 j pour les bolets des feuillus, 21-60 j pour ceux des pins).
 # exclusions_fond : lignées lichénisées, retirées du fond.
 # indicateurs     : espèces témoins (document synthese_champignons_indicateurs) :
 #                   même milieu ou mêmes arbres hôtes que leur cible.

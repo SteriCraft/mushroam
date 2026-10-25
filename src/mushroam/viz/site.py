@@ -96,7 +96,7 @@ cercles vides : position imprécise. Une couche masquée montre les cibles exclu
 <section class="tab" id="tab-prediction" role="tabpanel" hidden>
 <h2 style="border:0;margin-top:8px">Prédiction</h2>
 <div class="placeholder">À venir : indice de déclenchement par analogues (étape 5), puis combinaison avec la favorabilité
-d'habitat (étape 6). Cet onglet affichera une carte des secteurs classés pour la coulemelle et les bolets.</div>
+d'habitat (étape 6). Cet onglet affichera une carte des secteurs classés pour la coulemelle, les bolets des feuillus et les bolets des pins.</div>
 </section>
 </main>
 {THEME_JS % json.dumps(LIGHT_TO_DARK)}{TABS_JS}

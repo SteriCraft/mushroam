@@ -6,7 +6,8 @@
 # fond            : fond de référence (toutes les Fungi).
 # cibles          : espèces ou familles recherchées. fenetre_jours = fenêtre de
 #                   poussée après une situation météo analogue, en jours
-#                   (d'après l'étape 4 : coulemelle 7-14 j, bolets 21-35 j).
+#                   (d'après l'étape 4 : pics à 7-14 j pour la coulemelle,
+#                   28-35 j pour les bolets des feuillus, 21-60 j pour ceux des pins).
 # exclusions_fond : lignées lichénisées, retirées du fond.
 # indicateurs     : espèces témoins (document synthese_champignons_indicateurs) :
 #                   même milieu ou mêmes arbres hôtes que leur cible.
@@ -26,8 +27,8 @@ cibles:
       rank: species
       inat_id: 63401
       gbif_key: 8914748
-  bolets:
-    label: Bolets
+  bolets_feuillus:
+    label: Bolets des feuillus
     fenetre_jours:
     - 14
     - 40
@@ -36,14 +37,20 @@ cibles:
       rank: family
       inat_id: 48702
       gbif_key: 8789
-    - name: Suillaceae
-      rank: family
-      inat_id: 53489
-      gbif_key: 8455
     - name: Gyroporaceae
       rank: family
       inat_id: 125691
       gbif_key: 4193
+  bolets_pins:
+    label: Bolets des pins
+    fenetre_jours:
+    - 21
+    - 50
+    membres:
+    - name: Suillaceae
+      rank: family
+      inat_id: 53489
+      gbif_key: 8455
 exclusions_fond:
   lichens:
   - name: Lecanoromycetes
@@ -109,7 +116,7 @@ indicateurs:
       gbif_key: 9186073
   feuillus:
     label: Témoins de forêt de feuillus
-    cible: bolets
+    cible: bolets_feuillus
     membres:
     - name: Russula cyanoxantha
       rank: species
@@ -121,7 +128,7 @@ indicateurs:
       gbif_key: 7496350
   pinede:
     label: Témoins de pinède
-    cible: bolets
+    cible: bolets_pins
     membres:
     - name: Lactarius deliciosus
       rank: species

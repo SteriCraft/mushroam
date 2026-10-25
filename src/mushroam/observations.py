@@ -189,7 +189,7 @@ def main() -> None:
     out = PROCESSED_DIR / "observations.parquet"
     df.to_parquet(out, index=False)
     print(f"Écrit : {out} ({len(df)} lignes, dont {df['doublon'].sum()} doublons probables)")
-    print(df.groupby("source")[["lichen", "cible_coulemelle", "cible_bolets", "doublon",
+    print(df.groupby("source")[["lichen", "cible_coulemelle", "cible_bolets_feuillus", "cible_bolets_pins", "doublon",
                                 "urbain", "point_repete", "retenue"]].sum())
 
 

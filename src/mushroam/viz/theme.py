@@ -1,12 +1,16 @@
 """Palette et mise en forme communes aux graphiques (clair / sombre).
 
 Une couleur par entité, identique dans tout le rapport et sur la carte :
-sources (iNat bleu, GBIF jaune) et cibles (coulemelle aqua, bolets orange).
-Paires validées pour la vision des couleurs altérée, en clair et en sombre.
+sources (iNat bleu, GBIF jaune) et cibles (coulemelle aqua, bolets des feuillus
+orange, bolets des pins violet).
+Validé pour la vision des couleurs altérée, en clair et en sombre (les trois
+couleurs de cibles deux à deux).
 """
 
-COLORS = {"inat": "#2a78d6", "gbif": "#eda100", "coulemelle": "#1baf7a", "bolets": "#eb6834"}
-COLORS_DARK = {"inat": "#3987e5", "gbif": "#c98500", "coulemelle": "#199e70", "bolets": "#d95926"}
+COLORS = {"inat": "#2a78d6", "gbif": "#eda100", "coulemelle": "#1baf7a",
+          "bolets_feuillus": "#eb6834", "bolets_pins": "#6250d6"}
+COLORS_DARK = {"inat": "#3987e5", "gbif": "#c98500", "coulemelle": "#199e70",
+               "bolets_feuillus": "#d95926", "bolets_pins": "#9085e9"}
 SEQ_LIGHT = ["#86b6ef", "#3987e5", "#1c5cab", "#0d366b"]  # rampe ordinale bleue
 SEQ_DARK = ["#184f95", "#256abf", "#5598e7", "#9ec5f4"]
 NEUTRAL_LIGHT, NEUTRAL_DARK = "#a3a29c", "#6b6a64"
