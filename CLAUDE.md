@@ -240,7 +240,7 @@ Une ligne par observation datée au jour près, dans le rayon. Colonnes clés : 
 7. Sortie : **site local à onglets** (`data/outputs/site/index.html`) :
    - Observations : carte, puis données ;
    - Météo : carte par maille avec choix de variable et de date sur 90 jours, puis données et écarts aux normales ;
-   - Prédiction : carte à 1 km, avec l'avis du dernier jour météo pour les 14 jours suivants. Couches : potentiel, probabilité, habitat, saison, classe météo. Fond au choix (plan routier Esri par défaut, OpenTopoMap, satellite) et curseur de transparence. Au survol : commune et valeurs. Sous la carte : meilleurs secteurs (une maille par commune) et validations.
+   - Prédiction : carte à 1 km, avec l'avis du dernier jour météo pour les 14 jours suivants. Couches : potentiel, probabilité, habitat, saison, classe météo. Fond au choix (plan routier Esri par défaut, OpenTopoMap, satellite) et curseur de transparence. Opacité de chaque maille selon sa valeur : potentiel < 1 masqué, habitat proche de × 1 et météo normale transparents. Filtre « les X % meilleures mailles ». Au survol : commune et valeurs. Sous la carte : meilleurs secteurs (une maille par commune) et validations.
 
    **Listes de sortie (probabilité, octobre 2026)** (`model/sorties.py`) :
    - Une liste = les espèces notées le même jour, au même lieu (à ~1 km), par le même observateur ou le même jeu GBIF, avec au moins 5 espèces. 412 listes précises depuis 1999.

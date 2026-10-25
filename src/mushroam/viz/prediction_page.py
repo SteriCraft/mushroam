@@ -217,7 +217,11 @@ PRED_TEMPLATE = MAP_HEAD.replace("__TITLE__", "Carte de prédiction") + r"""
 <div id="ctrl">
   <label>Cible <select id="cible"></select></label>
   <label>Couche <select id="layer"></select></label>
-  <label>Transparence <input id="opacity" type="range" min="0" max="100" step="5" value="45" style="width:110px"></label>
+  <label>Afficher <select id="top">
+    <option value="1">toutes les mailles</option><option value="0.5">les 50 % meilleures</option>
+    <option value="0.25">les 25 % meilleures</option><option value="0.1">les 10 % meilleures</option>
+    <option value="0.05">les 5 % meilleures</option></select></label>
+  <label>Transparence <input id="opacity" type="range" min="0" max="90" step="5" value="15" style="width:110px"></label>
   <span>Avis du <span id="date"></span> pour les 14 jours suivants</span>
 </div>
 <div id="map" style="position:relative"><div id="tip"></div></div></div>
@@ -244,7 +248,8 @@ L.circle(D.centre, {radius:D.rayon_m, color:"#52514e", weight:1.5, fill:false, d
 const raw = atob(D.idx), buf = new ArrayBuffer(raw.length), u8 = new Uint8Array(buf);
 for (let i = 0; i < raw.length; i++) u8[i] = raw.charCodeAt(i);
 const IDX = new Int16Array(buf);
-let c = Object.keys(D.cibles)[0], layer = "potentiel", lo = 0, hi = 1, breaks = [];
+let c = Object.keys(D.cibles)[0], layer = "potentiel", lo = 0, hi = 1, breaks = [], cut = -Infinity, top98 = 1;
+const POT_MIN = 1;  // potentiel < 1 : moins prometteur que la normale, masqué
 function fill(sel, entries, val){ for (const [k, l] of entries) { const o=document.createElement("option"); o.value=k; o.textContent=l; sel.appendChild(o); } sel.value = val; }
 const selC = document.getElementById("cible"), selL = document.getElementById("layer");
 fill(selC, Object.entries(D.cibles), c);
@@ -256,11 +261,34 @@ function range(){
   if (scale() === "cat") return;
   // Probabilité : paliers fixes, pour lire une valeur absolue.
   if (scale() === "prob") { breaks = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5]; return; }
-  const v = values().filter(x => x >= 0).map(x => scale() === "ratio" ? Math.log(Math.max(x, 1e-3)) : x).sort((a,b)=>a-b);
+  // Couleurs du potentiel calculées sur les seules mailles affichées (≥ 1).
+  const v = values().filter(x => x >= (layer === "potentiel" ? POT_MIN : 0))
+    .map(x => scale() === "ratio" ? Math.log(Math.max(x, 1e-3)) : x).sort((a,b)=>a-b);
   const q = p => v[Math.min(v.length-1, Math.floor(p*(v.length-1)))];
   if (scale() === "ratio") { const r = Math.max(Math.abs(q(0.02)), Math.abs(q(0.98)), Math.log(1.5)); lo=-r; hi=r; }
   // Séquentiel : paliers à effectifs égaux (chaque couleur = 1/7 des mailles), pour classer les secteurs.
-  else breaks = SEQ.slice(1).map((_, k) => q((k + 1) / SEQ.length));
+  else { breaks = SEQ.slice(1).map((_, k) => q((k + 1) / SEQ.length)); top98 = q(0.98); }
+}
+// Seuil « les X % meilleures mailles », sur toutes les mailles de la zone.
+function threshold(){
+  const share = +document.getElementById("top").value;
+  if (share >= 1 || scale() === "cat") { cut = -Infinity; return; }
+  const v = values().filter(x => x >= 0).sort((a,b)=>b-a);
+  cut = v[Math.min(v.length-1, Math.floor(share * v.length))];
+}
+// Opacité selon la valeur : les mailles peu intéressantes s'effacent et laissent voir le fond.
+function alpha(x){
+  if (scale() === "cat") return x === 1 ? 0 : 0.85;           // météo normale transparente
+  if (x < 0 || x < cut) return 0;
+  const clamp = u => Math.max(0, Math.min(1, u));
+  if (layer === "potentiel") {
+    if (x < POT_MIN) return 0;
+    return 0.35 + 0.65 * clamp(Math.log(x / POT_MIN) / Math.log(Math.max(top98, POT_MIN * 1.01) / POT_MIN));
+  }
+  if (scale() === "prob") return 0.1 + 0.9 * clamp(x / 0.5);
+  if (scale() === "ratio") return clamp(Math.abs(Math.log(Math.max(x, 1e-3))) / hi);  // proche de × 1 : transparent
+  let k = 0; while (k < breaks.length && x >= breaks[k]) k++;
+  return 0.15 + 0.85 * k / breaks.length;
 }
 function hex(h){ return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]; }
 function rgb(x){
@@ -275,11 +303,11 @@ const ctx = canvas.getContext("2d");
 let overlay = null;
 function draw(){
   const img = ctx.createImageData(D.w, D.h), vals = values();
-  const cache = new Map();
   for (let p = 0; p < IDX.length; p++) {
     const i = IDX[p]; if (i < 0) continue;
+    const a = alpha(vals[i]); if (a <= 0) continue;
     const col = rgb(vals[i]); if (!col) continue;
-    img.data[4*p] = col[0]; img.data[4*p+1] = col[1]; img.data[4*p+2] = col[2]; img.data[4*p+3] = 255;
+    img.data[4*p] = col[0]; img.data[4*p+1] = col[1]; img.data[4*p+2] = col[2]; img.data[4*p+3] = Math.round(255 * a);
   }
   ctx.putImageData(img, 0, 0);
   if (overlay) map.removeLayer(overlay);
@@ -291,7 +319,8 @@ function f2(x){ return x.toFixed(2).replace(".", ","); }
 function legend(){
   const el = document.getElementById("legend"), m = D.layers[layer];
   if (scale() === "cat") {
-    el.innerHTML = "<div>"+m.label+"</div><div class='cats'>" + CATL.map((l,i)=>"<span><i style='background:"+CAT[i]+"'></i>"+l+"</span>").join("") + "</div>";
+    el.innerHTML = "<div>"+m.label+"</div><div class='cats'>" + [0, 2].map(i=>"<span><i style='background:"+CAT[i]+"'></i>"+CATL[i]+"</span>").join("")
+      + "</div><div style='color:var(--muted);margin-top:2px'>météo normale : transparente</div>";
     return;
   }
   if (scale() === "prob") {
@@ -306,13 +335,16 @@ function legend(){
       + '<div class="bar" style="background:linear-gradient(90deg,'+SEQ.join(",")+')"></div>'
       + '<div class="ticks"><span>plus bas</span><span>plus hauts</span></div>'
       + '<div class="ticks"><span>&lt; '+f2(breaks[0])+'</span><span>≥ '+f2(breaks[breaks.length-1])+'</span></div>'
-      + '<div style="color:var(--muted);margin-top:2px">chaque couleur = 1/7 des mailles</div>';
+      + '<div style="color:var(--muted);margin-top:2px">' + (layer === "potentiel"
+        ? "masqué sous 1 (moins que la normale) ; chaque couleur = 1/7 des mailles affichées"
+        : "chaque couleur = 1/7 des mailles") + '</div>';
     return;
   }
   const f = x => "× " + f2(Math.exp(x));
   el.innerHTML = "<div>"+m.label+"</div>"
     + '<div class="bar" style="background:linear-gradient(90deg,'+DIV.join(",")+')"></div>'
-    + '<div class="ticks"><span>'+f(lo)+'</span><span>× 1</span><span>'+f(hi)+'</span></div>';
+    + '<div class="ticks"><span>'+f(lo)+'</span><span>× 1</span><span>'+f(hi)+'</span></div>'
+    + '<div style="color:var(--muted);margin-top:2px">proche de × 1 : transparent</div>';
 }
 const lg = L.control({position:"bottomright"});
 lg.onAdd = () => { const d = L.DomUtil.create("div","legend"); d.id="legend"; return d; };
@@ -341,8 +373,10 @@ map.on("mouseout", () => { tip.style.display = "none"; });
 const opacityInput = document.getElementById("opacity");
 function opacity(){ return 1 - opacityInput.value / 100; }
 opacityInput.oninput = () => { if (overlay) overlay.setOpacity(opacity()); };
-selC.onchange = () => { c = selC.value; range(); draw(); };
-selL.onchange = () => { layer = selL.value; range(); draw(); };
-range(); draw();
+function redraw(){ range(); threshold(); draw(); }
+selC.onchange = () => { c = selC.value; redraw(); };
+selL.onchange = () => { layer = selL.value; redraw(); };
+document.getElementById("top").onchange = redraw;
+redraw();
 </script></body></html>
 """

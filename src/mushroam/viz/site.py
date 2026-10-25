@@ -99,7 +99,7 @@ cercles vides : position imprécise. Une couche masquée montre les cibles exclu
 <p class="note">Une case = une maille de 1 km. <b>Potentiel</b> = favorabilité de l'habitat × saison normale à cette altitude
 pour les 14 prochains jours × facteur de la météo actuelle : sert à <b>classer</b> les secteurs.
 <b>Probabilité</b> = chance qu'une sortie type note la cible, estimée sur les listes de sortie des mycologues (météo ordinaire).
-Choix du fond (plan, topographie, satellite) en haut à droite ; curseur de transparence en haut.
+Plus une maille est intéressante, plus elle est opaque ; potentiel inférieur à 1 (moins que la normale) masqué. « Afficher » ne garde que les X % meilleures mailles. Choix du fond (plan, topographie, satellite) en haut à droite.
 <a href="carte_prediction.html" target="_blank">Plein écran</a>.</p>
 <iframe class="mapframe" src="carte_prediction.html" title="Carte de prédiction"></iframe>
 <h2>Données</h2>
