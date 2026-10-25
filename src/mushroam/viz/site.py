@@ -1,4 +1,4 @@
-"""Site local : onglets Observations, Météo et Prédiction.
+"""Site local : onglets Observations, Météo, Prédiction et Sorties.
 
 Chaque onglet montre d'abord une carte, puis les données. Le site est un dossier
 de fichiers statiques à ouvrir dans un navigateur :
@@ -9,8 +9,10 @@ Usage : python -m mushroam.viz.site
 
 from __future__ import annotations
 
+import html
 import json
 import shutil
+from pathlib import Path
 
 import pandas as pd
 
@@ -25,6 +27,7 @@ from mushroam.viz.meteo_page import meteo_map_html, meteo_section, normals, with
 from mushroam.viz.theme import CSS, LIGHT_TO_DARK, THEME_JS
 
 OUT_DIR = DATA_DIR / "outputs" / "site"
+STATIC_DIR = Path(__file__).parent / "static"
 
 TABS_CSS = """
 header.site { border-bottom: 1px solid var(--border); background: var(--surface-2); }
@@ -37,13 +40,36 @@ nav.tabs a { padding: 8px 14px; border: 1px solid transparent; border-bottom: no
 nav.tabs a[aria-selected="true"] { background: var(--surface); border-color: var(--border);
   color: var(--text); font-weight: 600; margin-bottom: -1px; }
 section.tab[hidden] { display: none; }
+@media (max-width: 480px) { nav.tabs a { padding: 8px 10px; } }
 .placeholder { padding: 32px; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted); }
 """
+
+# Onglet Sorties (formulaires, src/mushroam/viz/static/sorties.js).
+SORTIES_CSS = """
+#sorties-app { margin-top: 12px; }
+.sx-card { max-width: 420px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.sx-card h3 { margin: 0; }
+.sx-field { display: flex; flex-direction: column; gap: 4px; color: var(--text-2); font-size: .9rem; }
+.sx-field input, .sx-field textarea, .sx-field select { font: inherit; font-size: 16px; padding: 8px 10px; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+.sx-field small { color: var(--muted); }
+.sx-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.sx-btn { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--accent);
+  background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
+.sx-btn:disabled { opacity: .6; cursor: default; }
+.sx-btn-2 { background: transparent; color: var(--accent); }
+.sx-err { color: #d03b3b; margin: 0; min-height: 1em; }
+.sx-err:empty { display: none; }
+.sx-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; }
+"""
+PB_SDK = "https://cdn.jsdelivr.net/npm/pocketbase@0.28.1/dist/pocketbase.umd.js"
 
 TABS_JS = """
 <script>
 (function () {
-  const tabs = ['observations', 'meteo', 'prediction'];
+  const tabs = ['observations', 'meteo', 'prediction', 'sorties'];
   function show(name) {
     if (!tabs.includes(name)) name = tabs[0];
     tabs.forEach(function (t) {
@@ -60,19 +86,20 @@ TABS_JS = """
 """
 
 
-def page(obs_html: str, met_html: str, cond_html: str, pred_html: str, generated: pd.Timestamp, last_meteo: pd.Timestamp) -> str:
+def page(obs_html: str, met_html: str, cond_html: str, pred_html: str, generated: pd.Timestamp, last_meteo: pd.Timestamp,
+         pb_url: str) -> str:
     def tab(name, label):
         return f'<a id="link-{name}" href="#{name}" role="tab">{label}</a>'
 
     return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mushroam</title>
-<style>{CSS}{TABS_CSS}</style><script src="plotly.min.js"></script></head>
+<style>{CSS}{TABS_CSS}{SORTIES_CSS}</style><script src="plotly.min.js"></script></head>
 <body>
 <header class="site"><div class="in">
 <h1>Mushroam</h1>
 <p>Champignons à 100 km autour de Montpellier · généré le {generated:%d/%m/%Y} · météo jusqu'au {last_meteo:%d/%m/%Y}</p>
-<nav class="tabs" role="tablist">{tab("observations", "Observations")}{tab("meteo", "Météo")}{tab("prediction", "Prédiction")}</nav>
+<nav class="tabs" role="tablist">{tab("observations", "Observations")}{tab("meteo", "Météo")}{tab("prediction", "Prédiction")}{tab("sorties", "Sorties")}</nav>
 </div></header>
 <main>
 <section class="tab" id="tab-observations" role="tabpanel">
@@ -105,8 +132,16 @@ Plus une maille est intéressante, plus elle est opaque ; potentiel inférieur �
 <h2>Données</h2>
 {pred_html}
 </section>
+<section class="tab" id="tab-sorties" role="tabpanel" hidden>
+<h2 style="border:0;margin-top:8px">Sorties</h2>
+<p class="note">Carnet de sorties partagé entre amis : sorties, participants, observations et photos.
+Réservé aux comptes inscrits (code d'invitation). Une sortie n'est visible que de ses participants.</p>
+<div id="sorties-app" data-pb="{html.escape(pb_url)}"><p class="note">Chargement…</p></div>
+</section>
 </main>
 {THEME_JS % json.dumps(LIGHT_TO_DARK)}{TABS_JS}
+<script src="{PB_SDK}"></script>
+<script src="sorties.js"></script>
 </body></html>"""
 
 
@@ -116,6 +151,8 @@ def build() -> None:
     if not js.exists():
         from plotly.offline import get_plotlyjs
         js.write_text(get_plotlyjs(), encoding="utf-8")
+    for f in STATIC_DIR.iterdir():
+        shutil.copy(f, OUT_DIR / f.name)
 
     taxa, rules = load_taxa(), load_yaml("sources.yaml")
     obs = pd.read_parquet(PROCESSED_DIR / "observations.parquet")
@@ -153,7 +190,8 @@ def build() -> None:
                                    pd.read_parquet(analog) if analog.exists() else None,
                                    pd.read_parquet(PROCESSED_DIR / "sorties_validation.parquet"))
 
-    (OUT_DIR / "index.html").write_text(page(obs_html, met_html, cond_html, pred_html, pd.Timestamp.today(), last), encoding="utf-8")
+    (OUT_DIR / "index.html").write_text(page(obs_html, met_html, cond_html, pred_html, pd.Timestamp.today(), last,
+                                                 load_yaml("site.yaml")["pocketbase_url"]), encoding="utf-8")
     old = DATA_DIR / "outputs" / "exploration"
     if old.exists():
         shutil.rmtree(old)  # ancien rapport, remplacé par le site

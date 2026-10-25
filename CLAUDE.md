@@ -203,7 +203,7 @@ Le workflow `.github/workflows/site.yml` tourne chaque jour à 8 h UTC : mode qu
 Les extractions récupèrent **toutes** les Fungi du rayon (tous niveaux de qualité) : fond et cibles viennent de la même requête. `--refresh` retélécharge tout. Sous Windows, préfixer par `PYTHONUTF8=1` si la console affiche mal les accents.
 
 ### Sorties de terrain (PocketBase)
-Comptes, sorties, observations et photos des utilisateurs : PocketBase sur le Raspberry, exposé par Tailscale Funnel (https://raspberrypi.tailcb6614.ts.net/). Le site statique l'appelle depuis le navigateur. Schéma et règles d'accès versionnés dans `pocketbase/` (voir son README). Inscription avec code d'invitation, connexion par nom d'utilisateur. Une observation sans espèce = « À identifier ».
+Comptes, sorties, observations et photos des utilisateurs : PocketBase sur le Raspberry, exposé par Tailscale Funnel (https://raspberrypi.tailcb6614.ts.net/). Le site statique l'appelle depuis le navigateur. Schéma et règles d'accès versionnés dans `pocketbase/` (voir son README). Inscription avec code d'invitation, connexion par nom d'utilisateur. Onglet Sorties du site : `src/mushroam/viz/static/sorties.js` (SDK PocketBase depuis jsDelivr), adresse du serveur dans `config/site.yaml` (surchargeable par `?pb=` pour les tests). Une observation sans espèce = « À identifier ».
 
 ### Table unifiée `observations.parquet`
 Une ligne par observation datée au jour près, dans le rayon. Colonnes clés : `source` (inat / gbif), `quality` (research / needs_id / gbif), `precision_m`, `lichen`, `cible_<clé>`, `membre_<clé>`, `ok_habitat` (précision ≤ 1 km), `ok_meteo` (≤ 10 km ou inconnue), `doublon`, `altitude_m`, `bati`, `urbain`, `point_repete`, **`retenue`** (filtre par défaut), `cellule_meteo` (clé de jointure avec `meteo_features.parquet` sur `cellule` + `date`).
@@ -248,6 +248,7 @@ Une ligne par observation datée au jour près, dans le rayon. Colonnes clés : 
    Le gain des bolets des feuillus est faible : l'essence seule les distingue mal des autres champignons forestiers.
 7. Sortie : **site local à onglets** (`data/outputs/site/index.html`) :
    - Observations : carte, puis données ;
+   - Sorties : connexion, carnet de sorties partagé (PocketBase, voir plus haut) ;
    - Météo : carte par maille avec choix de variable et de date sur 90 jours, puis données et écarts aux normales ;
    - Prédiction : carte à 1 km, avec l'avis du dernier jour météo pour les 14 jours suivants. Couches : potentiel, probabilité, habitat, saison, classe météo. Fond au choix (plan routier Esri par défaut, OpenTopoMap, satellite) et curseur de transparence. Opacité de chaque maille selon sa valeur : potentiel < 1 masqué, habitat proche de × 1 et météo normale transparents. Filtre « les X % meilleures mailles ». Au survol : commune et valeurs. Sous la carte : meilleurs secteurs (une maille par commune) et validations.
 

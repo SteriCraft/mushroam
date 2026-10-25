@@ -1,0 +1,4 @@
+# Réglages du site publié.
+# Serveur des sorties de terrain (PocketBase sur le Raspberry, via Tailscale Funnel).
+# Pour tester avec un autre serveur sans regénérer le site : index.html?pb=http://127.0.0.1:8091#sorties
+pocketbase_url: https://raspberrypi.tailcb6614.ts.net
