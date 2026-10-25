@@ -79,6 +79,7 @@ Retenu (étape 6), sans compte, via le WFS de la Géoplateforme (`https://data.g
 - **Carte des sols INRAE** (Référentiels régionaux pédologiques au 1/250 000, couche `INRA.CARTE.SOLS:geoportail_vf`) : type de sol dominant de chaque unité, regroupé en calcaire (calcosol, rendisol, dolomitosol…), acide (alocrisol, podzosol, rankosol, brunisol…) et autre. Environ 9 000 polygones.
 - Le WFS renvoie au plus 5 000 polygones par requête (environ 66 Mo de GeoJSON pour la BD Forêt). Chaque page est rasterisée aussitôt à 50 m ; seul ce résultat est mis en cache (`data/raw/wfs/`).
 - Copernicus DEM (altitude, relief) et ESA WorldCover (cultures, prairies), déjà utilisés aux étapes 2 et 3.
+- Communes : ADMIN EXPRESS de l'IGN (couche `ADMINEXPRESS-COG-CARTO.LATEST:commune`, renvoyée en WGS84), pour nommer les mailles de 1 km.
 
 Non retenus pour l'instant :
 - OSO ou Corine Land Cover, qui doublonnent WorldCover ;
@@ -145,7 +146,7 @@ src/mushroam/    paquet Python (installé en mode éditable)
   inat/ gbif/    extraction et mise à plat par source
   meteo/         sim2.py (extraction SIM2), features.py (variables décalées)
   habitat/       dem.py (relief), landcover.py (WorldCover, part de bâti), vecteurs.py (BD Forêt, sols), grille.py (1 km)
-  model/         conditions.py (étape 4), analogues.py (écarté), meteo_classes.py, habitat.py, prediction.py
+  model/         conditions.py (étape 4), analogues.py (écarté), meteo_classes.py, habitat.py, sorties.py, prediction.py
   viz/           site.py (site à onglets), explore.py, meteo_page.py, prediction_page.py, map.py, theme.py
 notebooks/       exploration
 tests/
@@ -187,7 +188,8 @@ Paramètres dans `config/sources.yaml`. La carte des observations a une couche (
 .venv/Scripts/python -m mushroam.habitat.grille     # grille d'habitat 1 km -> habitat_1km.parquet
 .venv/Scripts/python -m mushroam.model.habitat      # favorabilité + validation spatiale -> habitat_*.parquet
 .venv/Scripts/python -m mushroam.model.meteo_classes  # contrôle des classes météo -> classes_meteo_validation.parquet
-.venv/Scripts/python -m mushroam.model.prediction   # habitat × saison × météo du jour -> prediction_1km.parquet
+.venv/Scripts/python -m mushroam.model.sorties      # listes de sortie -> probabilité (sorties_*.parquet)
+.venv/Scripts/python -m mushroam.model.prediction   # habitat × saison × météo du jour + probabilité -> prediction_1km.parquet
 .venv/Scripts/python -m mushroam.model.analogues    # (facultatif, piste écartée) -> analogues_validation.parquet
 .venv/Scripts/python -m mushroam.viz.site        # site local -> data/outputs/site/index.html
 ```
@@ -238,12 +240,18 @@ Une ligne par observation datée au jour près, dans le rayon. Colonnes clés : 
 7. Sortie : **site local à onglets** (`data/outputs/site/index.html`) :
    - Observations : carte, puis données ;
    - Météo : carte par maille avec choix de variable et de date sur 90 jours, puis données et écarts aux normales ;
-   - Prédiction : carte à 1 km (potentiel, habitat, saison, classe météo ; avis du dernier jour météo pour les 14 jours suivants), meilleurs secteurs et validations.
+   - Prédiction : carte à 1 km, avec l'avis du dernier jour météo pour les 14 jours suivants. Couches : potentiel, probabilité, habitat, saison, classe météo. Fond au choix (plan routier Esri par défaut, OpenTopoMap, satellite) et curseur de transparence. Au survol : commune et valeurs. Sous la carte : meilleurs secteurs (une maille par commune) et validations.
+
+   **Listes de sortie (probabilité, octobre 2026)** (`model/sorties.py`) :
+   - Une liste = les espèces notées le même jour, au même lieu (à ~1 km), par le même observateur ou le même jeu GBIF, avec au moins 5 espèces. 412 listes précises depuis 1999.
+   - Une liste sans la cible compte comme une absence. Régression logistique : log(habitat) + log(saison) + log(taille de la liste).
+   - Validation par blocs de 20 km, avec l'habitat « hors bloc ». AUC : coulemelle 0,79 (saison + taille seules : 0,77), feuillus 0,73 (0,71), pins 0,67 (0,63). Bonne calibration par tiers.
+   - Probabilité affichée : celle d'une sortie type (8 espèces, la médiane) par météo ordinaire. La classe météo du jour n'améliore pas ce modèle, et son effet n'est pas monotone pour les bolets, à cause de la poussée décalée.
 
 Pistes suivantes :
 - piste 1 (régression météo simple) ;
 - effort iNat par sous-zone, pour contrôler la classe météo à l'échelle locale ;
-- relevés de terrain avec absences ;
+- relevés de terrain avec absences (carnet de sortie), pour une probabilité propre à l'utilisateur ;
 - espèces témoins comme signal récent (bolets des feuillus, × 1,5).
 
 ## Questions ouvertes

@@ -5,7 +5,8 @@ Pour chaque maille de 1 km dans le rayon :
 - part de chaque groupe de sols INRAE (`sol_<groupe>`) ;
 - part de cultures, prairies et bâti d'après ESA WorldCover (`wc_<classe>`) ;
 - altitude moyenne et relief (écart type de l'altitude) ;
-- maille SIM2 correspondante (`cellule_meteo`).
+- maille SIM2 correspondante (`cellule_meteo`) ;
+- commune au centre de la maille (`commune`, `departement`).
 
 Entrées : foret_50m.tif, sols_50m.tif (mushroam.habitat.vecteurs),
 dem_90m.tif, worldcover_40m.tif.
@@ -27,7 +28,8 @@ from rasterio.warp import Resampling, reproject
 from mushroam.config import PROCESSED_DIR, load_zone
 from mushroam.habitat.dem import DEM_PATH
 from mushroam.habitat.landcover import LANDCOVER_PATH
-from mushroam.habitat.vecteurs import FOREST_CLASSES, FOREST_PATH, RES_M, SOIL_CLASSES, SOIL_PATH, grid_l93
+from mushroam.habitat.vecteurs import (COMMUNES_PATH, FOREST_CLASSES, FOREST_PATH, RES_M, SOIL_CLASSES, SOIL_PATH,
+                                       build_communes, grid_l93)
 from mushroam.meteo.sim2 import cell_for_points
 from mushroam.observations import haversine_km
 
@@ -70,6 +72,22 @@ def warp_to_grid(path, transform, w, h, resampling) -> np.ndarray:
     return out
 
 
+def communes_at(lng: np.ndarray, lat: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Nom et département de la commune contenant chaque point (longitude, latitude WGS84)."""
+    import json
+
+    from shapely import STRtree, points
+    from shapely.geometry import shape
+    build_communes()
+    feats = json.loads(COMMUNES_PATH.read_text(encoding="utf-8"))["features"]
+    tree = STRtree([shape(f["geometry"]) for f in feats])
+    pt_idx, poly_idx = tree.query(points(lng, lat), predicate="within")
+    names, deps = np.full(len(lng), "", dtype=object), np.full(len(lng), "", dtype=object)
+    names[pt_idx] = [feats[i]["properties"]["nom"] for i in poly_idx]
+    deps[pt_idx] = [feats[i]["properties"]["dep"] for i in poly_idx]
+    return names, deps
+
+
 def build() -> pd.DataFrame:
     transform, w, h, (x0, y0, x1, y1) = grid_l93()
     with rasterio.open(FOREST_PATH) as r:
@@ -109,6 +127,7 @@ def build() -> pd.DataFrame:
     df = df[(df["dist_km"] <= z["rayon_km"]) & (df["mer"] < 0.5)].reset_index(drop=True)
     df.insert(0, "maille", cell_id(df["x"].to_numpy() - CELL_M / 2 + 1, df["y"].to_numpy() - CELL_M / 2 + 1))
     df["cellule_meteo"] = cell_for_points(df["lat"], df["lng"])
+    df["commune"], df["departement"] = communes_at(df["lng"].to_numpy(), df["lat"].to_numpy())
     return df
 
 

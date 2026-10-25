@@ -12,8 +12,9 @@ from pyproj import Transformer
 
 from mushroam.config import load_zone
 from mushroam.habitat.grille import cells_for_points
+from mushroam.model.sorties import VALID_PATH as LIST_VALID_PATH
 from mushroam.viz.explore import Report, html_table
-from mushroam.viz.meteo_page import BASEMAP_JS, MAP_HEAD
+from mushroam.viz.meteo_page import MAP_HEAD
 from mushroam.viz.theme import COLORS, plotly_layout
 
 PIXEL_M = 400  # taille d'un pixel de l'image, en mètres de la projection web (≈ 290 m au sol)
@@ -22,6 +23,7 @@ FROM_3857 = Transformer.from_crs("EPSG:3857", "EPSG:4326", always_xy=True)
 
 LAYERS = {
     "potentiel": ("Potentiel (habitat × saison × météo)", "seq"),
+    "probabilite": ("Probabilité pour une sortie type (météo ordinaire)", "prob"),
     "habitat": ("Habitat (× la moyenne des lieux prospectés)", "ratio"),
     "saison": ("Saison normale, 14 prochains jours (1 = meilleure période)", "seq"),
     "classe": ("Météo actuelle", "cat"),
@@ -58,6 +60,7 @@ def prediction_map_html(pred: pd.DataFrame, grid: pd.DataFrame, cibles: dict[str
     g = grid.set_index("maille")
     info = {
         "alt": g["altitude_m"].round().astype(int).tolist(),
+        "commune": [f"{c} ({d})" if c else "" for c, d in zip(g["commune"], g["departement"])],
         "foret": [dominant_forest(r) for _, r in g.iterrows()],
         "sol": [("calcaire" if r.sol_calcaire >= 0.5 else "acide" if r.sol_acide >= 0.5 else "mixte ou autre")
                 if not np.isnan(r.sol_calcaire) else "sans donnée" for r in g.itertuples()],
@@ -69,11 +72,12 @@ def prediction_map_html(pred: pd.DataFrame, grid: pd.DataFrame, cibles: dict[str
             "potentiel": p["potentiel"].round(3).fillna(-1).tolist(),
             "habitat": p["habitat"].round(3).fillna(-1).tolist(),
             "saison": p["saison"].round(3).fillna(-1).tolist(),
+            "probabilite": p["probabilite"].round(3).fillna(-1).tolist(),
         }
     p0 = pred[pred["cible"] == next(iter(cibles))].set_index("maille").reindex(cells)
     z = load_zone()
     payload = {
-        "date": pd.Timestamp(pred["date"].iloc[0]).strftime("%d/%m/%Y"),
+        "date": pd.Timestamp(pred["date"].iloc[0]).strftime("%d/%m/%Y"), "taille": round(float(pd.read_parquet(LIST_VALID_PATH)["taille_reference"].iloc[0])),
         "cibles": cibles, "layers": {k: {"label": a, "scale": b} for k, (a, b) in LAYERS.items()},
         "data": data, "classe": p0["classe"].map(CLASS_CODES).fillna(1).astype(int).tolist(),
         "facteurs": p0.groupby("classe")["facteur_meteo"].first().to_dict(),
@@ -87,20 +91,25 @@ def prediction_map_html(pred: pd.DataFrame, grid: pd.DataFrame, cibles: dict[str
 
 def top_sectors(pred: pd.DataFrame, grid: pd.DataFrame, key: str, n: int = 10) -> pd.DataFrame:
     p = pred[pred["cible"] == key].merge(grid, on=["maille"], suffixes=("", "_g"))
-    p = p[p["classe"] != "defavorable"].nlargest(n, "potentiel")
+    # Meilleure maille de chaque commune : des secteurs distincts plutôt que des mailles voisines
+    # (beaucoup de mailles sont ex æquo au plafond de favorabilité).
+    p = (p[p["classe"] != "defavorable"].sort_values(["potentiel", "probabilite"], ascending=False)
+         .drop_duplicates("commune").head(n))
     return pd.DataFrame({
         "position": [f"{a:.4f}, {b:.4f}" for a, b in zip(p["lat"], p["lng"])],
+        "commune": [f"{c} ({d})" for c, d in zip(p["commune"], p["departement"])],
         "altitude (m)": p["altitude_m"].round().astype(int).to_numpy(),
         "végétation": [dominant_forest(r) for _, r in p.iterrows()],
         "habitat": p["habitat"].round(2).to_numpy(), "saison": p["saison"].round(2).to_numpy(),
         "météo": p["classe"].map({"normale": "normale", "favorable": "favorable"}).to_numpy(),
         "potentiel": p["potentiel"].round(2).to_numpy(),
+        "probabilité": (100 * p["probabilite"]).round().astype(int).astype(str).to_numpy() + " %",
     }).set_index("position")
 
 
 def prediction_section(pred: pd.DataFrame, grid: pd.DataFrame, cibles: dict[str, str],
                        meteo_valid: pd.DataFrame, hab_valid: pd.DataFrame, coefs: pd.DataFrame,
-                       analog_valid: pd.DataFrame | None) -> str:
+                       analog_valid: pd.DataFrame | None, list_valid: pd.DataFrame) -> str:
     r = Report("pred")
     date = pd.Timestamp(pred["date"].iloc[0])
     p0 = pred[pred["cible"] == next(iter(cibles))]
@@ -110,10 +119,31 @@ def prediction_section(pred: pd.DataFrame, grid: pd.DataFrame, cibles: dict[str,
         for c, lab in [("favorable", "favorable"), ("normale", "normale"), ("defavorable", "défavorable")]) + "</div>")
 
     r.add(f"<h3>Meilleurs secteurs au {date:%d/%m/%Y} (14 prochains jours)</h3>")
-    r.add('<p class="note">Mailles de 1 km au potentiel le plus élevé, hors météo défavorable. Position : latitude / '
-          "longitude du centre de la maille (à coller dans un outil de carte).</p>")
+    taille = int(round(list_valid["taille_reference"].iloc[0]))
+    r.add('<p class="note">Meilleure maille de 1 km de chaque commune, classées par potentiel, hors météo défavorable. Position : latitude / '
+          "longitude du centre de la maille (à coller dans un outil de carte). Probabilité : chance qu'une sortie "
+          f"type (liste de {taille} espèces, comme celles des mycologues de la base) note la cible, par météo "
+          "ordinaire pour la période.</p>")
     for key, label in cibles.items():
         r.add(f"<h4>{label}</h4>" + html_table(top_sectors(pred, grid, key)))
+
+    # Listes de sortie : probabilité.
+    r.add("<h3>Probabilité : validation sur les listes de sortie</h3>")
+    r.add('<p class="note">Une liste de sortie = les espèces notées le même jour, au même endroit (à 1 km près), par '
+          "le même observateur ou le même jeu de données (sociétés mycologiques, ONF, CBN…), avec au moins 5 espèces. "
+          "Une liste sans la cible compte comme une absence. Modèle : habitat (hors bloc), saison et taille de la liste ; "
+          "validé par blocs géographiques de 20 km. Calibration : probabilité prédite et fréquence observée, pour "
+          "le tiers des listes le moins favorable, le tiers moyen et le tiers le plus favorable. La météo du jour "
+          "n'améliore pas ce modèle (la poussée des bolets suit la pluie de plusieurs semaines) : la probabilité "
+          "vaut pour une météo ordinaire.</p>")
+    lv = list_valid.assign(cible=list_valid["cible"].map(cibles)).set_index("cible")
+    pct = lambda x: f"{100 * x:.0f} %"
+    tab = pd.DataFrame({
+        "listes": lv["listes"], "avec la cible": lv["avec_cible"],
+        "AUC saison + taille": lv["auc_saison_taille"].round(3), "AUC + habitat": lv["auc_complet"].round(3),
+        **{f"tiers {i} : prédit / observé": lv[f"t{i}_predit"].map(pct) + " / " + lv[f"t{i}_observe"].map(pct)
+           for i in (1, 2, 3)}})
+    r.add(html_table(tab))
 
     # Météo : validation des classes.
     r.add("<h3>Classe météo : contrôle année par année</h3>")
@@ -187,6 +217,7 @@ PRED_TEMPLATE = MAP_HEAD.replace("__TITLE__", "Carte de prédiction") + r"""
 <div id="ctrl">
   <label>Cible <select id="cible"></select></label>
   <label>Couche <select id="layer"></select></label>
+  <label>Transparence <input id="opacity" type="range" min="0" max="100" step="5" value="45" style="width:110px"></label>
   <span>Avis du <span id="date"></span> pour les 14 jours suivants</span>
 </div>
 <div id="map" style="position:relative"><div id="tip"></div></div></div>
@@ -197,7 +228,19 @@ const DIV = ["#b42c2c","#d65a52","#ec9a8c","#f0efec","#9ec5f4","#3987e5","#184f9
 const CAT = ["#d65a52", "#c3c2b7", "#3987e5"], CATL = ["défavorable", "normale", "favorable"];
 const map = L.map("map", {zoomControl:true}).setView(D.centre, 8);
 const ATTRIB = " · BD Forêt IGN, sols INRAE, SIM2 Météo-France, iNaturalist, GBIF";
-""" + BASEMAP_JS + r"""
+// Fonds sans clé, utilisables depuis un fichier local (jamais tile.openstreetmap.org, qui refuse file://).
+const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
+const bases = {
+  "Plan routier (Esri)": L.tileLayer(ESRI + "World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+    {maxZoom:19, attribution:"Fond © Esri, HERE, Garmin, © OpenStreetMap" + ATTRIB}),
+  "Topographie (OpenTopoMap)": L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    {maxZoom:17, attribution:"© OpenStreetMap, SRTM, © OpenTopoMap (CC-BY-SA)" + ATTRIB}),
+  "Satellite (Esri)": L.tileLayer(ESRI + "World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    {maxZoom:19, attribution:"Fond © Esri, Maxar, Earthstar Geographics" + ATTRIB}),
+};
+bases["Plan routier (Esri)"].addTo(map);
+L.control.layers(bases, null, {position:"topright", collapsed:true}).addTo(map);
+L.circle(D.centre, {radius:D.rayon_m, color:"#52514e", weight:1.5, fill:false, dashArray:"6 6", interactive:false}).addTo(map);
 const raw = atob(D.idx), buf = new ArrayBuffer(raw.length), u8 = new Uint8Array(buf);
 for (let i = 0; i < raw.length; i++) u8[i] = raw.charCodeAt(i);
 const IDX = new Int16Array(buf);
@@ -211,6 +254,8 @@ const scale = () => D.layers[layer].scale;
 const values = () => layer === "classe" ? D.classe : D.data[c][layer];
 function range(){
   if (scale() === "cat") return;
+  // Probabilité : paliers fixes, pour lire une valeur absolue.
+  if (scale() === "prob") { breaks = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5]; return; }
   const v = values().filter(x => x >= 0).map(x => scale() === "ratio" ? Math.log(Math.max(x, 1e-3)) : x).sort((a,b)=>a-b);
   const q = p => v[Math.min(v.length-1, Math.floor(p*(v.length-1)))];
   if (scale() === "ratio") { const r = Math.max(Math.abs(q(0.02)), Math.abs(q(0.98)), Math.log(1.5)); lo=-r; hi=r; }
@@ -221,7 +266,7 @@ function hex(h){ return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), p
 function rgb(x){
   if (scale() === "cat") return hex(CAT[x]);
   if (x < 0) return null;
-  if (scale() === "seq") { let k = 0; while (k < breaks.length && x >= breaks[k]) k++; return hex(SEQ[k]); }
+  if (scale() === "seq" || scale() === "prob") { let k = 0; while (k < breaks.length && x >= breaks[k]) k++; return hex(SEQ[k]); }
   const t = Math.log(Math.max(x, 1e-3));
   return hex(DIV[Math.floor(Math.max(0, Math.min(0.9999, (t-lo)/(hi-lo))) * DIV.length)]);
 }
@@ -234,11 +279,11 @@ function draw(){
   for (let p = 0; p < IDX.length; p++) {
     const i = IDX[p]; if (i < 0) continue;
     const col = rgb(vals[i]); if (!col) continue;
-    img.data[4*p] = col[0]; img.data[4*p+1] = col[1]; img.data[4*p+2] = col[2]; img.data[4*p+3] = 190;
+    img.data[4*p] = col[0]; img.data[4*p+1] = col[1]; img.data[4*p+2] = col[2]; img.data[4*p+3] = 255;
   }
   ctx.putImageData(img, 0, 0);
   if (overlay) map.removeLayer(overlay);
-  overlay = L.imageOverlay(canvas.toDataURL(), D.bounds, {interactive:false}).addTo(map);
+  overlay = L.imageOverlay(canvas.toDataURL(), D.bounds, {interactive:false, opacity:opacity()}).addTo(map);
   overlay.getElement().style.imageRendering = "pixelated";
   legend();
 }
@@ -249,11 +294,19 @@ function legend(){
     el.innerHTML = "<div>"+m.label+"</div><div class='cats'>" + CATL.map((l,i)=>"<span><i style='background:"+CAT[i]+"'></i>"+l+"</span>").join("") + "</div>";
     return;
   }
+  if (scale() === "prob") {
+    el.innerHTML = "<div>"+m.label+"</div>"
+      + '<div class="bar" style="background:linear-gradient(90deg,'+SEQ.join(",")+')"></div>'
+      + '<div class="ticks">' + ["", ...breaks].map((b, k) => "<span>" + (k ? Math.round(100*b) : "0") + "</span>").join("") + '</div>'
+      + '<div style="color:var(--muted);margin-top:2px">en %, liste de ' + D.taille + ' espèces</div>';
+    return;
+  }
   if (scale() === "seq") {
     el.innerHTML = "<div>"+m.label+"</div>"
       + '<div class="bar" style="background:linear-gradient(90deg,'+SEQ.join(",")+')"></div>'
-      + '<div class="ticks"><span>plus bas</span><span>1/7 des mailles par couleur</span><span>plus hauts</span></div>'
-      + '<div class="ticks"><span>&lt; '+f2(breaks[0])+'</span><span>≥ '+f2(breaks[breaks.length-1])+'</span></div>';
+      + '<div class="ticks"><span>plus bas</span><span>plus hauts</span></div>'
+      + '<div class="ticks"><span>&lt; '+f2(breaks[0])+'</span><span>≥ '+f2(breaks[breaks.length-1])+'</span></div>'
+      + '<div style="color:var(--muted);margin-top:2px">chaque couleur = 1/7 des mailles</div>';
     return;
   }
   const f = x => "× " + f2(Math.exp(x));
@@ -275,7 +328,9 @@ map.on("mousemove", e => {
   const i = (col >= 0 && col < D.w && row >= 0 && row < D.h) ? IDX[row * D.w + col] : -1;
   if (i < 0) { tip.style.display = "none"; return; }
   const d = D.data[c];
-  tip.innerHTML = "<b>" + D.cibles[c] + "</b> · potentiel <b>" + f2(d.potentiel[i]) + "</b>"
+  tip.innerHTML = (D.info.commune[i] ? "<b>" + D.info.commune[i] + "</b><br>" : "")
+    + D.cibles[c] + " · potentiel <b>" + f2(d.potentiel[i]) + "</b>"
+    + " · probabilité <b>" + Math.round(100 * d.probabilite[i]) + " %</b>"
     + "<br>habitat × " + f2(d.habitat[i]) + " · saison " + f2(d.saison[i])
     + "<br>météo " + CATL[D.classe[i]] + " (pluie 30 j : " + D.pluie30[i] + " mm)"
     + "<br>" + D.info.alt[i] + " m · " + D.info.foret[i] + " · sol " + D.info.sol[i];
@@ -283,6 +338,9 @@ map.on("mousemove", e => {
   tip.style.display = "block";
 });
 map.on("mouseout", () => { tip.style.display = "none"; });
+const opacityInput = document.getElementById("opacity");
+function opacity(){ return 1 - opacityInput.value / 100; }
+opacityInput.oninput = () => { if (overlay) overlay.setOpacity(opacity()); };
 selC.onchange = () => { c = selC.value; range(); draw(); };
 selL.onchange = () => { layer = selL.value; range(); draw(); };
 range(); draw();

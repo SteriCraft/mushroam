@@ -96,8 +96,10 @@ cercles vides : position imprécise. Une couche masquée montre les cibles exclu
 </section>
 <section class="tab" id="tab-prediction" role="tabpanel" hidden>
 <h2 style="border:0;margin-top:8px">Prédiction</h2>
-<p class="note">Une case = une maille de 1 km. Potentiel = favorabilité de l'habitat × saison normale à cette altitude
-pour les 14 prochains jours × facteur de la météo actuelle. Sert à <b>classer</b> les secteurs, pas à donner une probabilité.
+<p class="note">Une case = une maille de 1 km. <b>Potentiel</b> = favorabilité de l'habitat × saison normale à cette altitude
+pour les 14 prochains jours × facteur de la météo actuelle : sert à <b>classer</b> les secteurs.
+<b>Probabilité</b> = chance qu'une sortie type note la cible, estimée sur les listes de sortie des mycologues (météo ordinaire).
+Choix du fond (plan, topographie, satellite) en haut à droite ; curseur de transparence en haut.
 <a href="carte_prediction.html" target="_blank">Plein écran</a>.</p>
 <iframe class="mapframe" src="carte_prediction.html" title="Carte de prédiction"></iframe>
 <h2>Données</h2>
@@ -148,7 +150,8 @@ def build() -> None:
     pred_html = prediction_section(pred, hgrid, cibles, pd.read_parquet(PROCESSED_DIR / "classes_meteo_validation.parquet"),
                                    pd.read_parquet(PROCESSED_DIR / "habitat_validation.parquet"),
                                    pd.read_parquet(PROCESSED_DIR / "habitat_coefficients.parquet"),
-                                   pd.read_parquet(analog) if analog.exists() else None)
+                                   pd.read_parquet(analog) if analog.exists() else None,
+                                   pd.read_parquet(PROCESSED_DIR / "sorties_validation.parquet"))
 
     (OUT_DIR / "index.html").write_text(page(obs_html, met_html, cond_html, pred_html, pd.Timestamp.today(), last), encoding="utf-8")
     old = DATA_DIR / "outputs" / "exploration"

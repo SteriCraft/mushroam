@@ -9,6 +9,10 @@
 potentiel = habitat × saison × facteur météo : sert à classer les secteurs,
 pas une probabilité.
 
+probabilite : chance qu'une sortie type (liste de taille médiane) note la
+cible, d'après les listes de sortie (mushroam.model.sorties), par météo
+ordinaire pour la période.
+
 Sortie : data/processed/prediction_1km.parquet (date d'émission = dernier jour météo).
 
 Usage : python -m mushroam.model.prediction
@@ -24,6 +28,7 @@ from mushroam.model.analogues import select_obs, seasonal_level, window_mean
 from mushroam.model.conditions import altitude_band
 from mushroam.model.habitat import FAV_PATH
 from mushroam.model.meteo_classes import FACTEUR_PATH, classify, factors
+from mushroam.model.sorties import COEF_PATH as LIST_COEF_PATH, VALID_PATH as LIST_VALID_PATH, probability
 
 OUT_PATH = PROCESSED_DIR / "prediction_1km.parquet"
 
@@ -47,6 +52,8 @@ def build() -> pd.DataFrame:
     base["classe"] = base["classe"].fillna("normale")
     base["facteur_meteo"] = base["facteur_meteo"].fillna(1.0)
     bands = altitude_band(base["altitude_m"]).to_numpy().astype(int)
+    list_coefs = pd.read_parquet(LIST_COEF_PATH)
+    taille = float(pd.read_parquet(LIST_VALID_PATH)["taille_reference"].iloc[0])
     dates = pd.Series(last, index=base.index)
     out = []
     for key in taxa["cibles"]:
@@ -54,6 +61,7 @@ def build() -> pd.DataFrame:
         p = base.drop(columns=list(taxa["cibles"])).assign(cible=key, habitat=base[key])
         p["saison"] = window_mean(level, bands, dates, tuple(rules["horizon_jours"]))
         p["potentiel"] = p["habitat"] * p["saison"] * p["facteur_meteo"]
+        p["probabilite"] = probability(list_coefs, key, p["habitat"], p["saison"], taille)
         out.append(p)
     df = pd.concat(out, ignore_index=True)
     df["date"] = last
@@ -64,7 +72,7 @@ def main() -> None:
     df = build()
     df.to_parquet(OUT_PATH, index=False)
     print(f"Écrit : {OUT_PATH} ({len(df)} lignes, émis le {df['date'].iloc[0]:%d/%m/%Y})")
-    print(df.groupby("cible")[["habitat", "saison", "facteur_meteo", "potentiel"]].describe().T.round(2).to_string())
+    print(df.groupby("cible")[["habitat", "saison", "facteur_meteo", "potentiel", "probabilite"]].describe().T.round(2).to_string())
 
 
 if __name__ == "__main__":

@@ -67,13 +67,19 @@ def training_table(obs: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
     s["doy_sin"], s["doy_cos"] = np.sin(doy), np.cos(doy)
     s["doy_sin2"], s["doy_cos2"] = np.sin(2 * doy), np.cos(2 * doy)
     s["gbif"] = (s["source"] == "gbif").astype(float)
-    bx, by = (s["x"] // (BLOC_KM * 1000)).astype(int), (s["y"] // (BLOC_KM * 1000)).astype(int)
-    blocs = (bx.astype(str) + "_" + by.astype(str))
-    # Blocs répartis au hasard (graine fixe) entre les plis.
-    ub = np.sort(blocs.unique())
-    rng = np.random.default_rng(0)
-    s["pli"] = blocs.map(dict(zip(ub, rng.permutation(len(ub)) % N_PLIS)))
+    s["pli"] = block_folds(s, grid)
     return s.reset_index(drop=True)
+
+
+def block_folds(df: pd.DataFrame, grid: pd.DataFrame) -> np.ndarray:
+    """Pli de chaque ligne (colonnes x, y en Lambert-93) : blocs de BLOC_KM km de la
+    grille répartis au hasard (graine fixe) entre N_PLIS plis."""
+    def key(d):
+        return ((d["x"] // (BLOC_KM * 1000)).astype(int).astype(str) + "_"
+                + (d["y"] // (BLOC_KM * 1000)).astype(int).astype(str))
+    ub = np.sort(key(grid).unique())
+    perm = np.random.default_rng(0).permutation(len(ub)) % N_PLIS
+    return key(df).map(dict(zip(ub, perm))).to_numpy()
 
 
 class Model:
@@ -134,6 +140,14 @@ def evaluate(t: pd.DataFrame, y: np.ndarray) -> dict:
     return res
 
 
+def favorability(m: Model, t: pd.DataFrame, cells: pd.DataFrame) -> np.ndarray:
+    """exp(partie habitat), 1 = moyenne des lieux prospectés, bornée à leur plage
+    (1er et 99e centiles) : pas d'extrapolation vers des milieux jamais observés."""
+    seen = m.partial(t, HABITAT_VARS)
+    lo, hi = np.quantile(seen, [0.01, 0.99])
+    return np.exp(np.clip(m.partial(cells, HABITAT_VARS), lo, hi)) / np.exp(seen).mean()
+
+
 def build() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     taxa = load_taxa()
     grid = pd.read_parquet(GRID_PATH)
@@ -142,6 +156,7 @@ def build() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     t = training_table(obs, grid)
     t = pd.concat([t.drop(columns=[c for c in HABITAT_VARS if c in t.columns]), habitat_matrix(t)], axis=1)
     fav = grid[["maille", "x", "y", "lat", "lng", "altitude_m", "cellule_meteo"]].copy()
+    fav["pli"] = block_folds(grid, grid)
     valid, coefs = [], []
     for key, c in taxa["cibles"].items():
         y = t[f"cible_{key}"].to_numpy().astype(int)
@@ -151,12 +166,15 @@ def build() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
               f"altitude={res['auc_altitude']:.3f} saison+source={res['auc_saison_source']:.3f} "
               "quintiles=" + " ".join(f"{res[f'q{i}']:.2f}" for i in range(1, 6)))
         m = Model(HABITAT_VARS + NUISANCE_VARS).fit(t, y)
-        part = m.partial(hab_grid, HABITAT_VARS)
-        seen = m.partial(t, HABITAT_VARS)
-        ref = np.exp(seen).mean()  # moyenne des lieux prospectés
-        # Pas d'extrapolation : bornes = 1er et 99e centiles des lieux prospectés.
-        lo, hi = np.quantile(seen, [0.01, 0.99])
-        fav[key] = np.exp(np.clip(part, lo, hi)) / ref
+        fav[key] = favorability(m, t, hab_grid)
+        # Version « hors bloc » : chaque maille prédite par un modèle ajusté sans son bloc
+        # (sert à valider honnêtement les modèles qui l'utilisent, comme les listes de sortie).
+        oof = np.full(len(grid), np.nan)
+        for f in range(N_PLIS):
+            train, cells = (t["pli"] != f).to_numpy(), fav["pli"].to_numpy() == f
+            mf = Model(HABITAT_VARS + NUISANCE_VARS).fit(t[train], y[train])
+            oof[cells] = favorability(mf, t[train], hab_grid[cells])
+        fav[f"{key}_hors_bloc"] = oof
         rc = m.raw_coefficients()[HABITAT_VARS]
         coefs.append(pd.DataFrame({"cible": key, "variable": rc.index, "coef": rc.to_numpy()}))
     return fav, pd.DataFrame(valid), pd.concat(coefs, ignore_index=True)

@@ -41,3 +41,13 @@ classes_meteo:
   favorable:                # au moins une condition vraie, et pas défavorable
     pluie_30j_min: 100      # mm sur 30 jours (au moins)
     jours_depuis_20mm_max: 14  # pluie d'au moins 20 mm il y a 14 jours ou moins
+
+# ------------------------------------------------------------------
+# Listes de sortie : python -m mushroam.model.sorties
+# Une liste = toutes les espèces notées le même jour, au même endroit (à ~1 km),
+# par le même observateur (iNat) ou le même jeu de données (GBIF). Si la cible
+# n'y figure pas, c'est une absence : on peut estimer une probabilité.
+listes_sortie:
+  especes_min: 5            # taille minimale d'une liste
+  debut: "1999-03-01"       # météo SIM2 disponible (30 jours de rodage)
+  arrondi_deg: 0.01         # regroupement des lieux (~1 km)

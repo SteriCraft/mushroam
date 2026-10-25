@@ -10,13 +10,16 @@ le résultat de chaque page (pixels touchés et classe), pas les polygones
 bruts : environ 2 Go de GeoJSON pour la BD Forêt.
 
 Sorties : data/processed/foret_50m.tif, data/processed/sols_50m.tif
-(une classe par pixel, 0 = sans donnée ; codes dans FOREST_CLASSES et SOIL_CLASSES).
+(une classe par pixel, 0 = sans donnée ; codes dans FOREST_CLASSES et SOIL_CLASSES),
+et data/processed/communes.geojson (limites communales simplifiées, ADMIN EXPRESS
+de l'IGN, pour nommer les mailles).
 
 Usage : python -m mushroam.habitat.vecteurs [--refresh]
 """
 
 from __future__ import annotations
 
+import json
 import sys
 import time
 
@@ -38,7 +41,9 @@ CACHE = RAW_DIR / "wfs"
 
 FOREST_LAYER = "LANDCOVER.FORESTINVENTORY.V2:formation_vegetale"
 SOIL_LAYER = "INRA.CARTE.SOLS:geoportail_vf"
+COMMUNE_LAYER = "ADMINEXPRESS-COG-CARTO.LATEST:commune"
 FOREST_PATH = PROCESSED_DIR / "foret_50m.tif"
+COMMUNES_PATH = PROCESSED_DIR / "communes.geojson"
 SOIL_PATH = PROCESSED_DIR / "sols_50m.tif"
 
 # Classes de végétation (0 = hors BD Forêt : cultures, prairies, bâti, eau…)
@@ -147,10 +152,32 @@ def build_layer(layer: str, props: str, sort: str | None, classify, out_path, na
           + ", ".join(f"{c}={p:.1%}" for c, p in enumerate(counts) if p > 0))
 
 
+def build_communes(refresh: bool = False) -> None:
+    """Communes de l'emprise (géométries simplifiées « CARTO », quelques Mo)."""
+    if COMMUNES_PATH.exists() and not refresh:
+        return
+    _, _, _, bbox = grid_l93()
+    feats, start, total = [], 0, None
+    while total is None or start < total:
+        d = fetch_page(COMMUNE_LAYER, "geometrie,nom_officiel,code_insee,code_insee_du_departement", bbox, start,
+                       "code_insee")
+        total = int(d["numberMatched"])
+        feats += d["features"]
+        start += PAGE
+    # Le service renvoie cette couche en WGS84 (longitude, latitude).
+    out = {"type": "FeatureCollection",
+           "features": [{"type": "Feature", "geometry": f["geometry"],
+                         "properties": {"nom": f["properties"]["nom_officiel"],
+                                        "dep": f["properties"]["code_insee_du_departement"]}} for f in feats]}
+    COMMUNES_PATH.write_text(json.dumps(out), encoding="utf-8")
+    print(f"Écrit : {COMMUNES_PATH} ({len(feats)} communes)")
+
+
 def main() -> None:
     refresh = "--refresh" in sys.argv
     build_layer(FOREST_LAYER, "geom,code_tfv,tfv_g11,essence", "id", forest_class, FOREST_PATH, "bdforet_v2", refresh)
     build_layer(SOIL_LAYER, "geom,ger_nom,id_ucs", None, soil_class, SOIL_PATH, "sols_inrae", refresh)
+    build_communes(refresh)
 
 
 if __name__ == "__main__":
