@@ -1,0 +1,73 @@
+# Taxons du projet. Les identifiants (inat_id, gbif_key) sont résolus par API :
+#   python -m mushroam.taxa
+# Ne pas les saisir à la main.
+fond:
+  name: Fungi
+  rank: kingdom
+  inat_id: 47170
+  gbif_key: 5
+cibles:
+  coulemelle:
+    label: Coulemelle
+    membres:
+    - name: Macrolepiota procera
+      rank: species
+      inat_id: 63401
+      gbif_key: 8914748
+  bolets:
+    label: Bolets
+    membres:
+    - name: Boletaceae
+      rank: family
+      inat_id: 48702
+      gbif_key: 8789
+    - name: Suillaceae
+      rank: family
+      inat_id: 53489
+      gbif_key: 8455
+    - name: Gyroporaceae
+      rank: family
+      inat_id: 125691
+      gbif_key: 4193
+exclusions_fond:
+  lichens:
+  - name: Lecanoromycetes
+    rank: class
+    inat_id: 54743
+    gbif_key: 180
+  - name: Arthoniomycetes
+    rank: class
+    inat_id: 152028
+    gbif_key: 313
+  - name: Lichinomycetes
+    rank: class
+    inat_id: 152030
+    gbif_key: 314
+  - name: Candelariomycetes
+    rank: class
+    inat_id: null
+    gbif_key: 10792796
+  - name: Coniocybomycetes
+    rank: class
+    inat_id: null
+    gbif_key: 10874653
+  - name: Candelariales
+    rank: order
+    inat_id: 152550
+    gbif_key: 1269
+  - name: Coniocybales
+    rank: order
+    inat_id: 791575
+    gbif_key: 10699167
+  - name: Verrucariales
+    rank: order
+    inat_id: 117869
+    gbif_key: 1043
+  - name: Pyrenulales
+    rank: order
+    inat_id: 117881
+    gbif_key: 1044
+  - name: Lichenomphalia
+    rank: genus
+    inat_id: 118252
+    gbif_key: 3268941

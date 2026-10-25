@@ -1,0 +1,1 @@
+"""Analogues, favorabilité, combinaison."""

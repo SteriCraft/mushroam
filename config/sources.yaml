@@ -1,0 +1,40 @@
+# Règles de fusion des sources d'observations.
+
+gbif:
+  # Jeux exclus. iNaturalist est extrait directement (avec les observations
+  # « à confirmer »), sa copie GBIF ferait doublon.
+  datasets_exclus:
+    50c9509d-22c7-4a22-a47d-8c48425ef4a7: iNaturalist Research-grade Observations
+  # Types d'enregistrement conservés (exclus : séquences ADN, fossiles, cultures).
+  basis_of_record:
+  - HUMAN_OBSERVATION
+  - OBSERVATION
+  - PRESERVED_SPECIMEN
+  - OCCURRENCE
+
+inat:
+  # Niveaux de qualité conservés (« casual » = sans preuve, captif, ou date/lieu manquant).
+  quality_grades:
+  - research
+  - needs_id
+
+# Précision attribuée aux observations iNat floutées (cellule d'environ 0,2° ≈ 20 km).
+precision_floutee_m: 20000
+
+# Seuils de précision de position, par couche. Précision inconnue :
+# exclue de l'habitat, acceptée pour la météo (souvent un site ou une commune).
+precision_max_habitat_m: 1000
+precision_max_meteo_m: 10000
+
+# Doublons : même date, même nom de taxon, coordonnées arrondies à 0,01° (~1 km).
+doublons_arrondi_deg: 0.01
+
+# Observations saisies hors du lieu de récolte (bureau, laboratoire, domicile).
+# Exclues du fond comme des cibles.
+filtre_urbain:
+  fenetre_m: 600     # côté de la fenêtre carrée autour du point
+  seuil_bati: 0.3    # part de bâti (WorldCover) au-delà de laquelle le point est urbain
+points_repetes:
+  sources: [inat]    # GBIF : les points répétés sont des sites d'inventaire, gérés par la précision
+  arrondi_deg: 0.0005  # ~50 m
+  min_dates: 10      # même observateur, même point, au moins N dates distinctes

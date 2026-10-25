@@ -1,0 +1,8 @@
+# Zone d'étude
+centre:
+  lat: 43.6108
+  lng: 3.8767
+rayon_km: 100
+maille_m: 1000          # maille de la couche habitat
+crs_entree: "EPSG:4326" # WGS84
+crs_calcul: "EPSG:2154" # Lambert-93 (distances, surfaces)

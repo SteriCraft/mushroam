@@ -1,0 +1,3 @@
+# Les dépendances sont déclarées dans pyproject.toml :
+#   .venv/Scripts/python -m pip install -e ".[dev]"
+-e .[dev]
