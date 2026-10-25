@@ -106,14 +106,182 @@
     user.focus();
   }
 
-  function viewHome() {
-    const me = pb.authStore.record;
-    show(
-      h("div", { class: "sx-bar" },
-        h("span", {}, "Connecté en tant que ", h("b", {}, me.username)),
-        h("button", { class: "sx-btn sx-btn-2", onclick: () => { pb.authStore.clear(); viewLogin(); } }, "Se déconnecter")),
-      h("p", { class: "note" }, "La saisie des sorties et des observations arrive bientôt."));
+  // --- Sorties ----------------------------------------------------------------
+  // Adresses : #sorties (liste), #sorties/nouvelle, #sorties/<id>, #sorties/<id>/modifier.
+  const me = () => pb.authStore.record;
+  // replace : remplace la page courante dans l'historique (le formulaire enregistré ne revient pas avec « retour »).
+  const go = (path, replace) => { if (replace) location.replace("#" + path); else location.hash = path; };
+  const day = (d) => (d || "").slice(0, 10);  // date PocketBase « 2026-10-20 12:00:00.000Z » -> « 2026-10-20 »
+  function longDate(d) {
+    const x = new Date(day(d) + "T12:00:00");
+    return isNaN(x) ? "" : x.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   }
+  function shortDate(d) {
+    const x = new Date(day(d) + "T12:00:00");
+    return isNaN(x) ? "" : x.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+  }
+  function today() {
+    const t = new Date();
+    t.setMinutes(t.getMinutes() - t.getTimezoneOffset());
+    return t.toISOString().slice(0, 10);
+  }
+  const names = (users) => (users || []).map((u) => u.username).join(", ");
+  const isAuthor = (s) => s.auteur === me().id;
+
+  function bar() {
+    return h("div", { class: "sx-bar" },
+      h("span", {}, "Connecté en tant que ", h("b", {}, me().username)),
+      h("button", { class: "sx-btn sx-btn-2 sx-btn-sm", onclick: () => { pb.authStore.clear(); go("sorties"); viewLogin(); } }, "Se déconnecter"));
+  }
+  function loading() { show(bar(), h("p", { class: "note" }, "Chargement…")); }
+  function failed(x) {
+    show(bar(), h("p", { class: "sx-err", role: "alert" }, errorText(x)),
+      h("p", {}, h("a", { href: "#sorties" }, "← Toutes les sorties")));
+  }
+
+  async function viewList() {
+    loading();
+    let items;
+    try {
+      items = await pb.collection("sorties").getFullList({ sort: "-date,-created", expand: "auteur,participants" });
+    } catch (x) { failed(x); return; }
+    const head = h("div", { class: "sx-head" }, h("h3", {}, "Mes sorties"),
+      h("button", { class: "sx-btn", onclick: () => go("sorties/nouvelle") }, "Nouvelle sortie"));
+    if (!items.length) {
+      show(bar(), head, h("p", { class: "sx-empty" },
+        "Aucune sortie pour l'instant. Crée la première, ou demande à un ami de t'ajouter comme participant à la sienne."));
+      return;
+    }
+    show(bar(), head, h("ul", { class: "sx-list" }, items.map((s) => {
+      const ex = s.expand || {};
+      const others = [ex.auteur, ...(ex.participants || [])].filter((u) => u && u.id !== me().id);
+      return h("li", {}, h("a", { href: "#sorties/" + s.id },
+        h("b", {}, s.titre || "Sortie sans titre"),
+        h("span", {}, shortDate(s.date) + (others.length ? " · avec " + names(others) : ""))));
+    })));
+  }
+
+  async function viewSortie(id) {
+    loading();
+    let s;
+    try {
+      s = await pb.collection("sorties").getOne(id, { expand: "auteur,participants" });
+    } catch (x) {
+      failed(x.status === 404 ? { status: 404, response: { message: "Sortie introuvable, ou tu n'en fais pas partie." } } : x);
+      return;
+    }
+    const ex = s.expand || {};
+    const del = isAuthor(s) ? h("button", { class: "sx-btn sx-btn-danger", onclick: async () => {
+      if (!confirm("Supprimer cette sortie et toutes ses observations ? C'est définitif.")) return;
+      try { await pb.collection("sorties").delete(s.id); go("sorties", true); } catch (x) { alert(errorText(x)); }
+    } }, "Supprimer") : null;
+    show(bar(),
+      h("p", {}, h("a", { href: "#sorties" }, "← Toutes les sorties")),
+      h("div", { class: "sx-head" }, h("h3", {}, s.titre || "Sortie sans titre"),
+        h("div", { class: "sx-actions" },
+          h("button", { class: "sx-btn sx-btn-2", onclick: () => go("sorties/" + s.id + "/modifier") }, "Modifier"), del)),
+      h("p", { class: "sx-meta" }, longDate(s.date)),
+      h("p", { class: "sx-meta" }, "Créée par ", h("b", {}, ex.auteur ? ex.auteur.username : "?"),
+        ex.participants && ex.participants.length ? " · avec " + names(ex.participants) : ""),
+      s.commentaire ? h("p", { class: "sx-text" }, s.commentaire) : null,
+      h("h3", {}, "Observations"),
+      h("p", { class: "sx-empty" }, "L'ajout d'observations (photos, position, espèces) arrive à la prochaine étape."));
+  }
+
+  // Choix des participants parmi les comptes inscrits : recherche par nom, puis étiquettes.
+  function participantsPicker(all, selected) {
+    const chosen = new Map(selected.map((u) => [u.id, u]));
+    const chips = h("div", { class: "sx-chips" });
+    const sugg = h("ul", { class: "sx-sugg" });
+    const input = h("input", { type: "search", placeholder: "Rechercher un nom…", autocomplete: "off", autocapitalize: "none" });
+    function renderChips() {
+      chips.replaceChildren(...[...chosen.values()].map((u) => h("span", { class: "sx-chip" }, u.username,
+        h("button", { type: "button", "aria-label": "Retirer " + u.username,
+          onclick: () => { chosen.delete(u.id); renderChips(); renderSugg(); } }, "×"))));
+    }
+    function renderSugg() {
+      const q = input.value.trim().toLowerCase();
+      const list = q ? all.filter((u) => !chosen.has(u.id) && u.username.toLowerCase().includes(q)).slice(0, 8) : [];
+      sugg.replaceChildren(...list.map((u) => h("li", {}, h("button", { type: "button", onclick: () => {
+        chosen.set(u.id, u); input.value = ""; renderChips(); renderSugg(); input.focus();
+      } }, u.username))));
+      if (q && !list.length) sugg.replaceChildren(h("li", {}, h("button", { type: "button", disabled: true }, "Aucun compte trouvé")));
+    }
+    input.addEventListener("input", renderSugg);
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();  // pas d'envoi du formulaire
+      const b = sugg.querySelector("button:not([disabled])");
+      if (b) b.click();
+    });
+    renderChips();
+    return {
+      node: h("div", { class: "sx-field" }, h("span", {}, "Participants"), chips, input, sugg,
+        h("small", {}, "Ils verront la sortie et pourront y ajouter leurs observations.")),
+      ids: () => [...chosen.keys()],
+    };
+  }
+
+  async function viewForm(id) {
+    loading();
+    let s = null, users;
+    try {
+      [users, s] = await Promise.all([
+        pb.collection("users").getFullList({ sort: "username", fields: "id,username" }),
+        id ? pb.collection("sorties").getOne(id, { expand: "participants" }) : null,
+      ]);
+    } catch (x) { failed(x); return; }
+    const others = users.filter((u) => u.id !== me().id && (!s || u.id !== s.auteur));
+    const err = h("p", { class: "sx-err", role: "alert" });
+    const titre = h("input", { name: "titre", maxlength: 200, placeholder: "Ex. : Aigoual, hêtraie", value: s ? s.titre : "" });
+    const date = h("input", { name: "date", type: "date", required: true, value: s ? day(s.date) : today() });
+    const com = h("textarea", { name: "commentaire", maxlength: 5000 });
+    com.value = s ? s.commentaire : "";
+    // En modification par un participant, il figure dans la liste (il peut se retirer).
+    const picker = participantsPicker(others.concat(s && !isAuthor(s) ? [me()] : []),
+      s ? ((s.expand && s.expand.participants) || []) : []);
+    const back = id ? "sorties/" + id : "sorties";
+    const form = h("form", { class: "sx-card", onsubmit: async (e) => {
+      e.preventDefault(); err.textContent = ""; busy(form, true);
+      // Midi UTC : la date reste la même quel que soit le fuseau du téléphone.
+      const data = { titre: titre.value.trim(), date: date.value + " 12:00:00.000Z",
+        commentaire: com.value.trim(), participants: picker.ids() };
+      try {
+        if (s) {
+          await pb.collection("sorties").update(s.id, data);
+          // Un participant qui se retire perd l'accès à la sortie.
+          go(isAuthor(s) || data.participants.includes(me().id) ? "sorties/" + s.id : "sorties", true);
+        } else {
+          const n = await pb.collection("sorties").create({ ...data, auteur: me().id });
+          go("sorties/" + n.id, true);
+        }
+      } catch (x) { err.textContent = errorText(x); busy(form, false); }
+    } },
+      h("h3", {}, s ? "Modifier la sortie" : "Nouvelle sortie"),
+      field("Titre", titre, "Lieu ou nom de la sortie (facultatif)."),
+      field("Date", date),
+      field("Commentaire", com),
+      picker.node,
+      err,
+      h("div", { class: "sx-actions" },
+        h("button", { type: "submit", class: "sx-btn" }, s ? "Enregistrer" : "Créer la sortie"),
+        h("a", { href: "#" + back }, "Annuler")));
+    show(bar(), form);
+  }
+
+  // Aiguillage selon l'adresse (bouton « retour » du téléphone compris).
+  function route() {
+    const parts = location.hash.slice(1).split("/");
+    if (parts[0] !== "sorties") return;  // autre onglet
+    if (!pb.authStore.isValid) { viewLogin(); return; }
+    window.scrollTo(0, 0);
+    if (!parts[1]) viewList();
+    else if (parts[1] === "nouvelle") viewForm(null);
+    else if (parts[2] === "modifier") viewForm(parts[1]);
+    else viewSortie(parts[1]);
+  }
+  window.addEventListener("hashchange", route);
+  const viewHome = route;
 
   // --- Démarrage : session gardée dans le navigateur, revalidée auprès du serveur ---
   async function start() {

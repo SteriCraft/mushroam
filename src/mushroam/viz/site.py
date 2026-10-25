@@ -47,7 +47,7 @@ section.tab[hidden] { display: none; }
 # Onglet Sorties (formulaires, src/mushroam/viz/static/sorties.js).
 SORTIES_CSS = """
 #sorties-app { margin-top: 12px; }
-.sx-card { max-width: 420px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+.sx-card { max-width: 560px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
   padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .sx-card h3 { margin: 0; }
 .sx-field { display: flex; flex-direction: column; gap: 4px; color: var(--text-2); font-size: .9rem; }
@@ -61,8 +61,32 @@ SORTIES_CSS = """
 .sx-btn-2 { background: transparent; color: var(--accent); }
 .sx-err { color: #d03b3b; margin: 0; min-height: 1em; }
 .sx-err:empty { display: none; }
+.sx-field textarea { min-height: 90px; resize: vertical; }
+.sx-btn-danger { background: transparent; border-color: #d03b3b; color: #d03b3b; }
+.sx-list { list-style: none; padding: 0; margin: 12px 0; display: flex; flex-direction: column; gap: 8px; max-width: 720px; }
+.sx-list a { display: block; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-2); color: var(--text); text-decoration: none; }
+.sx-list a:hover { border-color: var(--accent); }
+.sx-list b { display: block; }
+.sx-list span { color: var(--muted); font-size: .9rem; }
+.sx-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin: 16px 0 4px; max-width: 720px; }
+.sx-head h3 { margin: 0; }
+.sx-meta { color: var(--text-2); margin: 4px 0; }
+.sx-text { white-space: pre-wrap; color: var(--text); max-width: 75ch; }
+.sx-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sx-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: .9rem; }
+.sx-chip button { border: 0; background: none; color: var(--muted); font-size: 1rem; cursor: pointer; padding: 0 6px; }
+.sx-sugg { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.sx-sugg:empty { display: none; }
+.sx-sugg li button { width: 100%; text-align: left; font: inherit; padding: 8px 10px; border: 0; background: none; color: var(--text); cursor: pointer; }
+.sx-sugg li + li { border-top: 1px solid var(--border); }
+.sx-sugg li button:hover { background: var(--surface-2); }
+.sx-empty { padding: 20px; border: 1px dashed var(--border); border-radius: 10px; color: var(--muted); max-width: 720px; }
 .sx-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between;
-  padding: 10px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; }
+  padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+  margin-bottom: 12px; max-width: 720px; }
+.sx-btn-sm { padding: 4px 10px; font-size: .85rem; font-weight: 500; }
 """
 PB_SDK = "https://cdn.jsdelivr.net/npm/pocketbase@0.28.1/dist/pocketbase.umd.js"
 
@@ -70,7 +94,8 @@ TABS_JS = """
 <script>
 (function () {
   const tabs = ['observations', 'meteo', 'prediction', 'sorties'];
-  function show(name) {
+  function show(hash) {
+    let name = hash.split('/')[0];  // #sorties/<id> : sous-page de l'onglet Sorties
     if (!tabs.includes(name)) name = tabs[0];
     tabs.forEach(function (t) {
       document.getElementById('tab-' + t).hidden = (t !== name);
