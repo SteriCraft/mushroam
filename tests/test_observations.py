@@ -89,3 +89,12 @@ def test_points_repetes():
     out = mark_repeated_points(df, sources=["inat"], arrondi_deg=0.0005, min_dates=10)
     # L'observateur 1 (12 dates) est marqué ; l'observateur 2 (3 dates) et GBIF ne le sont pas.
     assert out.tolist() == [True] * 12 + [False] * 3 + [False] * 12
+
+
+def test_flag_indicateurs():
+    taxa = {**TAXA, "indicateurs": {"feuillus": {"cible": "bolets", "membres": [
+        {"name": "Amanita rubescens", "inat_id": 67661, "gbif_key": 7496350}]}}}
+    df = pd.DataFrame({"source": ["inat", "gbif", "gbif"],
+                       "lineage": [[47170, 67661], [5, 7496350], [5, 67661]]})
+    df = flag_taxa(df, taxa)
+    assert df["indic_feuillus"].tolist() == [True, True, False]

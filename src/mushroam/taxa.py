@@ -16,7 +16,16 @@ INAT_FUNGI_ID = 47170  # règne Fungi dans iNaturalist, référence connue
 HEADER = """\
 # Taxons du projet. Les identifiants (inat_id, gbif_key) sont résolus par API :
 #   python -m mushroam.taxa
-# Ne pas les saisir à la main.
+# Ne pas les saisir à la main (ce fichier est réécrit : les commentaires hors
+# de cet en-tête sont perdus).
+#
+# fond            : fond de référence (toutes les Fungi).
+# cibles          : espèces ou familles recherchées. fenetre_jours = fenêtre de
+#                   poussée après une situation météo analogue, en jours
+#                   (d'après l'étape 4 : coulemelle 7-14 j, bolets 21-35 j).
+# exclusions_fond : lignées lichénisées, retirées du fond.
+# indicateurs     : espèces témoins (document synthese_champignons_indicateurs) :
+#                   même milieu ou mêmes arbres hôtes que leur cible.
 """
 
 
@@ -64,6 +73,8 @@ def resolve_all() -> dict:
     cfg["fond"] = resolve_entry(cfg["fond"], inat, gbif)
     for cible in cfg["cibles"].values():
         cible["membres"] = [resolve_entry(m, inat, gbif) for m in cible["membres"]]
+    for groupe in cfg.get("indicateurs", {}).values():
+        groupe["membres"] = [resolve_entry(m, inat, gbif, strict=False) for m in groupe["membres"]]
     # Les exclusions tolèrent un taxon absent d'un des deux référentiels.
     for group, entries in cfg.get("exclusions_fond", {}).items():
         cfg["exclusions_fond"][group] = [resolve_entry(e, inat, gbif, strict=False) for e in entries]
@@ -86,6 +97,9 @@ def main() -> None:
     for group, entries in cfg.get("exclusions_fond", {}).items():
         for e in entries:
             show(group, e)
+    for key, groupe in cfg.get("indicateurs", {}).items():
+        for m in groupe["membres"]:
+            show(key, m)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ Sortie : data/processed/observations.parquet, une ligne par observation exploita
 - date au jour près, position dans le rayon d'étude ;
 - `lichen` : à exclure du fond de référence ;
 - `cible_<clé>` / `membre_<clé>` : appartenance aux cibles de config/taxa.yaml ;
+- `indic_<groupe>` : espèce témoin du groupe (config/taxa.yaml, section indicateurs) ;
 - `precision_m` : incertitude de position (NaN si inconnue) ;
 - `ok_habitat` / `ok_meteo` : précision suffisante pour chaque couche ;
 - `doublon` : copie probable d'une autre ligne (même date, taxon, lieu à ~1 km près) ;
@@ -120,6 +121,11 @@ def flag_taxa(df: pd.DataFrame, taxa: dict) -> pd.DataFrame:
                  for lin, s in zip(lineages, sources)]
         df[f"membre_{key}"] = names
         df[f"cible_{key}"] = [n is not None for n in names]
+
+    # Espèces témoins : une colonne booléenne par groupe (indic_prairie, …).
+    for key, groupe in taxa.get("indicateurs", {}).items():
+        members = {s: set(ids(groupe["membres"], s)) for s in id_field}
+        df[f"indic_{key}"] = [bool(lin & members[s]) for lin, s in zip(lineages, sources)]
     return df
 
 

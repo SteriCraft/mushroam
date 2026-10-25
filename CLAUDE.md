@@ -29,6 +29,20 @@ Les identifiants de taxons (iNaturalist `inat_id`, GBIF `gbif_key`) ne doivent *
 
 **Fond de référence = Fungi hors lichens** (décision) : les lignées lichénisées sont listées dans `exclusions_fond` de `config/taxa.yaml`.
 
+### Espèces témoins (document `synthese_champignons_indicateurs.docx`, non versionné)
+Espèces partageant le milieu ou les arbres hôtes d'une cible, sans être la cible. Section `indicateurs` de `config/taxa.yaml`, colonnes `indic_<groupe>` dans `observations.parquet` :
+- `prairie` (pour la coulemelle) : *Agaricus campestris*, *Coprinus comatus*, *Marasmius oreades*, *Infundibulicybe geotropa* (≈ 200 obs.) ;
+- `feuillus` (pour les bolets) : *Russula cyanoxantha*, *Amanita rubescens* (≈ 190 obs.) ;
+- `pinede` (pour les Suillus) : *Lactarius deliciosus*, *Tricholoma terreum* (≈ 170 obs.).
+
+Évaluation sur nos données (octobre 2026) :
+- **feuillus ↔ Boletaceae** : géographie corrélée (Spearman 0,53 entre mailles), même réponse décalée à la pluie, même poussée d'été. Un témoin vu dans la même maille dans les 10 jours précédents multiplie la part des bolets par 1,5 (IC 1,2–1,9). **Utile.**
+- **pinède ↔ Suillaceae** : géographie corrélée (0,40), même saison tardive (pic en novembre). Pas lié aux Boletaceae. **Utile pour les Suillus seulement.**
+- **prairie ↔ coulemelle** : aucune corrélation géographique (0,00), témoins de basse altitude (médiane 180 m contre 640 m), pas de réponse à la pluie. **Peu utile ici.** La coulemelle est corrélée aux témoins de feuillus (0,46) : dans la zone, c'est une espèce de lisière et de clairière (73 % des points précis sous couvert arboré dans WorldCover).
+- **Suillaceae et Boletaceae ne se ressemblent pas** : géographie non corrélée (0,05), saison décalée (Suillus : 36 % en novembre, contre 14 %).
+
+Règle (reprise du document) : un témoin n'est gardé que s'il améliore la prédiction hors échantillon (saisons mises de côté).
+
 ## Sources de données
 
 ### Observations : iNaturalist API (`https://api.inaturalist.org/`)
@@ -184,5 +198,9 @@ Une ligne par observation datée au jour près, dans le rayon. Colonnes clés : 
 
 ## Questions ouvertes
 
-- Coulemelle : trop peu de données par automne pour une validation saison par saison seule. Regrouper plusieurs saisons par pli, ou s'appuyer sur un modèle commun aux deux cibles ?
-- Fond de référence GBIF : les inventaires d'associations (Malaval, CBN) ont un effort très différent d'iNat. Faut-il calculer les proportions par source puis les combiner ?
+- Bolets : modéliser séparément les bolets des feuillus (Boletaceae + Gyroporaceae) et les bolets des pins (Suillaceae), vu leurs différences de géographie et de saison ?
+
+Décisions prises :
+- Coulemelle : validation en regroupant plusieurs saisons par pli ; fiabilité moindre que pour les bolets, acceptée.
+- Proportions cible / fond calculées par source (iNat, GBIF), puis combinées.
+- Seuil urbain : 30 % de bâti, validé.

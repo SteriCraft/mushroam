@@ -1,6 +1,15 @@
 # Taxons du projet. Les identifiants (inat_id, gbif_key) sont résolus par API :
 #   python -m mushroam.taxa
-# Ne pas les saisir à la main.
+# Ne pas les saisir à la main (ce fichier est réécrit : les commentaires hors
+# de cet en-tête sont perdus).
+#
+# fond            : fond de référence (toutes les Fungi).
+# cibles          : espèces ou familles recherchées. fenetre_jours = fenêtre de
+#                   poussée après une situation météo analogue, en jours
+#                   (d'après l'étape 4 : coulemelle 7-14 j, bolets 21-35 j).
+# exclusions_fond : lignées lichénisées, retirées du fond.
+# indicateurs     : espèces témoins (document synthese_champignons_indicateurs) :
+#                   même milieu ou mêmes arbres hôtes que leur cible.
 fond:
   name: Fungi
   rank: kingdom
@@ -9,6 +18,9 @@ fond:
 cibles:
   coulemelle:
     label: Coulemelle
+    fenetre_jours:
+    - 5
+    - 20
     membres:
     - name: Macrolepiota procera
       rank: species
@@ -16,6 +28,9 @@ cibles:
       gbif_key: 8914748
   bolets:
     label: Bolets
+    fenetre_jours:
+    - 14
+    - 40
     membres:
     - name: Boletaceae
       rank: family
@@ -71,3 +86,48 @@ exclusions_fond:
     rank: genus
     inat_id: 118252
     gbif_key: 3268941
+indicateurs:
+  prairie:
+    label: Témoins de prairie
+    cible: coulemelle
+    membres:
+    - name: Agaricus campestris
+      rank: species
+      inat_id: 143563
+      gbif_key: 5243458
+    - name: Coprinus comatus
+      rank: species
+      inat_id: 47392
+      gbif_key: 7987658
+    - name: Marasmius oreades
+      rank: species
+      inat_id: 118240
+      gbif_key: 2537250
+    - name: Infundibulicybe geotropa
+      rank: species
+      inat_id: 451026
+      gbif_key: 9186073
+  feuillus:
+    label: Témoins de forêt de feuillus
+    cible: bolets
+    membres:
+    - name: Russula cyanoxantha
+      rank: species
+      inat_id: 194437
+      gbif_key: 2551542
+    - name: Amanita rubescens
+      rank: species
+      inat_id: 67661
+      gbif_key: 7496350
+  pinede:
+    label: Témoins de pinède
+    cible: bolets
+    membres:
+    - name: Lactarius deliciosus
+      rank: species
+      inat_id: 155197
+      gbif_key: 5248629
+    - name: Tricholoma terreum
+      rank: species
+      inat_id: 341797
+      gbif_key: 5241808
