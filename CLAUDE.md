@@ -149,6 +149,7 @@ src/mushroam/    paquet Python (installé en mode éditable)
   pipeline.py    enchaînement des étapes (quotidien / complet)
   model/         conditions.py (étape 4), analogues.py (écarté), meteo_classes.py, habitat.py, sorties.py, prediction.py
   viz/           site.py (site à onglets), explore.py, meteo_page.py, prediction_page.py, map.py, theme.py
+pocketbase/      serveur des sorties de terrain (schéma, règles, déploiement sur le Raspberry)
 notebooks/       exploration
 tests/
 ```
@@ -200,6 +201,9 @@ Paramètres dans `config/sources.yaml`. La carte des observations a une couche (
 Le workflow `.github/workflows/site.yml` tourne chaque jour à 8 h UTC : mode quotidien de `mushroam.pipeline`, puis publication de `data/outputs/site/` sur GitHub Pages (https://stericraft.github.io/mushroam/). `data/` est gardé d'une exécution à l'autre dans le cache d'Actions (environ 300 Mo). Pipeline complet le lundi, au lancement manuel avec l'option « complet », ou si le cache est vide (premier passage : plus d'une heure).
 
 Les extractions récupèrent **toutes** les Fungi du rayon (tous niveaux de qualité) : fond et cibles viennent de la même requête. `--refresh` retélécharge tout. Sous Windows, préfixer par `PYTHONUTF8=1` si la console affiche mal les accents.
+
+### Sorties de terrain (PocketBase)
+Comptes, sorties, observations et photos des utilisateurs : PocketBase sur le Raspberry, exposé par Tailscale Funnel (https://raspberrypi.tailcb6614.ts.net/). Le site statique l'appelle depuis le navigateur. Schéma et règles d'accès versionnés dans `pocketbase/` (voir son README). Inscription avec code d'invitation, connexion par nom d'utilisateur. Une observation sans espèce = « À identifier ».
 
 ### Table unifiée `observations.parquet`
 Une ligne par observation datée au jour près, dans le rayon. Colonnes clés : `source` (inat / gbif), `quality` (research / needs_id / gbif), `precision_m`, `lichen`, `cible_<clé>`, `membre_<clé>`, `ok_habitat` (précision ≤ 1 km), `ok_meteo` (≤ 10 km ou inconnue), `doublon`, `altitude_m`, `bati`, `urbain`, `point_repete`, **`retenue`** (filtre par défaut), `cellule_meteo` (clé de jointure avec `meteo_features.parquet` sur `cellule` + `date`).

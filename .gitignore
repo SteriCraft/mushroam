@@ -7,3 +7,6 @@ data/
 __pycache__/
 *.egg-info/
 .pytest_cache/
+
+# PocketBase lancé en local
+pocketbase/pb_data/
