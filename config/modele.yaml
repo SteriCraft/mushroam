@@ -1,0 +1,43 @@
+# Réglages du modèle par analogues (étape 5) : python -m mushroam.model.analogues
+
+# Variables météo comparées entre la situation du jour et les situations passées.
+# Chacune est transformée puis standardisée ; poids égaux.
+variables:
+  swi: aucune               # humidité des sols du jour
+  swi_tend_14j: aucune      # remise en eau ou dessèchement récent
+  pluie_30j: racine         # cumul sur 30 jours (racine carrée : pluies extrêmes moins dominantes)
+  jours_depuis_20mm: log    # log(1 + jours) : 3 j contre 10 j compte plus que 60 j contre 67 j
+  tmin_7j: aucune
+  tmax_7j: aucune
+
+demi_fenetre_saison_j: 30   # analogues cherchés à ± 30 jours de la même date de l'année
+k: 300                      # nombre d'analogues retenus (part de la cible, par maille)
+k_activite: 60              # idem pour l'activité des champignons (zone, un seul candidat par jour)
+# Rétrécissement vers « comme d'habitude » : (observé + a) / (attendu + a).
+# Évite des indices extrêmes quand les analogues contiennent peu d'observations.
+a_priori: 5
+
+# Validation : saisons mises de côté. Un pli = un bloc d'années consécutives,
+# entièrement exclu des analogues quand on le prédit.
+annees_par_pli:
+  defaut: 1
+  coulemelle: 3             # peu d'observations : plusieurs saisons par pli (décision)
+
+niveau_activite:
+  debut: "2019-01-01"       # effort iNat suffisant (étape 4)
+  effort_min: 50            # jours avec moins de 50 observations iNat ignorés
+
+# ------------------------------------------------------------------
+# Classe météo actuelle (piste retenue, octobre 2026) : python -m mushroam.model.meteo_classes
+# Les analogues ci-dessus ne battent pas la phénologie sur les saisons mises
+# de côté (piste gardée pour plus tard). Des règles simples, si.
+# Seuils sur les variables de la maille SIM2, au jour d'émission.
+classes_meteo:
+  horizon_jours: [0, 14]    # période couverte par l'avis
+  defavorable:              # au moins une condition vraie
+    pluie_30j_max: 40       # mm sur 30 jours (strictement moins)
+    tmax_7j_min: 27         # °C, moyenne des maximales sur 7 jours (au moins)
+    tmin_7j_max: 3          # °C, moyenne des minimales sur 7 jours (strictement moins)
+  favorable:                # au moins une condition vraie, et pas défavorable
+    pluie_30j_min: 100      # mm sur 30 jours (au moins)
+    jours_depuis_20mm_max: 14  # pluie d'au moins 20 mm il y a 14 jours ou moins

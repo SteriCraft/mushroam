@@ -20,6 +20,7 @@ from mushroam.observations import haversine_km
 from mushroam.viz.conditions_page import conditions_section
 from mushroam.viz.explore import observations_section
 from mushroam.viz.map import build_map
+from mushroam.viz.prediction_page import prediction_map_html, prediction_section
 from mushroam.viz.meteo_page import meteo_map_html, meteo_section, normals, with_anomalies
 from mushroam.viz.theme import CSS, LIGHT_TO_DARK, THEME_JS
 
@@ -59,7 +60,7 @@ TABS_JS = """
 """
 
 
-def page(obs_html: str, met_html: str, cond_html: str, generated: pd.Timestamp, last_meteo: pd.Timestamp) -> str:
+def page(obs_html: str, met_html: str, cond_html: str, pred_html: str, generated: pd.Timestamp, last_meteo: pd.Timestamp) -> str:
     def tab(name, label):
         return f'<a id="link-{name}" href="#{name}" role="tab">{label}</a>'
 
@@ -95,8 +96,12 @@ cercles vides : position imprécise. Une couche masquée montre les cibles exclu
 </section>
 <section class="tab" id="tab-prediction" role="tabpanel" hidden>
 <h2 style="border:0;margin-top:8px">Prédiction</h2>
-<div class="placeholder">À venir : indice de déclenchement par analogues (étape 5), puis combinaison avec la favorabilité
-d'habitat (étape 6). Cet onglet affichera une carte des secteurs classés pour la coulemelle, les bolets des feuillus et les bolets des pins.</div>
+<p class="note">Une case = une maille de 1 km. Potentiel = favorabilité de l'habitat × saison normale à cette altitude
+pour les 14 prochains jours × facteur de la météo actuelle. Sert à <b>classer</b> les secteurs, pas à donner une probabilité.
+<a href="carte_prediction.html" target="_blank">Plein écran</a>.</p>
+<iframe class="mapframe" src="carte_prediction.html" title="Carte de prédiction"></iframe>
+<h2>Données</h2>
+{pred_html}
 </section>
 </main>
 {THEME_JS % json.dumps(LIGHT_TO_DARK)}{TABS_JS}
@@ -135,7 +140,17 @@ def build() -> None:
     (OUT_DIR / "carte_meteo.html").write_text(meteo_map_html(f, grid), encoding="utf-8")
     met_html = meteo_section(f, grid)
 
-    (OUT_DIR / "index.html").write_text(page(obs_html, met_html, cond_html, pd.Timestamp.today(), last), encoding="utf-8")
+    # Prédiction (étapes 5 et 6).
+    pred = pd.read_parquet(PROCESSED_DIR / "prediction_1km.parquet")
+    hgrid = pd.read_parquet(PROCESSED_DIR / "habitat_1km.parquet")
+    (OUT_DIR / "carte_prediction.html").write_text(prediction_map_html(pred, hgrid, cibles), encoding="utf-8")
+    analog = PROCESSED_DIR / "analogues_validation.parquet"
+    pred_html = prediction_section(pred, hgrid, cibles, pd.read_parquet(PROCESSED_DIR / "classes_meteo_validation.parquet"),
+                                   pd.read_parquet(PROCESSED_DIR / "habitat_validation.parquet"),
+                                   pd.read_parquet(PROCESSED_DIR / "habitat_coefficients.parquet"),
+                                   pd.read_parquet(analog) if analog.exists() else None)
+
+    (OUT_DIR / "index.html").write_text(page(obs_html, met_html, cond_html, pred_html, pd.Timestamp.today(), last), encoding="utf-8")
     old = DATA_DIR / "outputs" / "exploration"
     if old.exists():
         shutil.rmtree(old)  # ancien rapport, remplacé par le site

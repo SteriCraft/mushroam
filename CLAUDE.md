@@ -74,15 +74,30 @@ Règle (reprise du document) : un témoin n'est gardé que s'il améliore la pr�
 - Humidité satellitaire (Sentinel-1, SMOS) : **non prioritaire**. Le radar mesure mal le sol sous couvert forestier dense. À n'envisager qu'en comparaison avec la réanalyse.
 
 ### Habitat (couche spatiale, statique)
-- Essences forestières : BD Forêt v2 (IGN).
-- Occupation du sol : OSO (Theia/CESBIO, dérivé de Sentinel-2) ou Corine Land Cover.
-- Relief : RGE ALTI ou Copernicus DEM (altitude, pente, exposition).
-- Géologie / pH : carte géologique BRGM (calcaire vs silice, déterminant pour plusieurs bolets).
-- Sentinel-2 : utile pour l'habitat et l'état de la végétation (NDVI, NDMI), **pas** pour l'humidité du sol.
+Retenu (étape 6), sans compte, via le WFS de la Géoplateforme (`https://data.geopf.fr/wfs/ows`) :
+- **BD Forêt v2** (IGN, couche `LANDCOVER.FORESTINVENTORY.V2:formation_vegetale`) : environ 162 000 polygones dans la zone. Regroupés en 7 classes : chênes verts, feuillus, châtaignier et hêtre, pins, autres conifères, forêt mixte, lande.
+- **Carte des sols INRAE** (Référentiels régionaux pédologiques au 1/250 000, couche `INRA.CARTE.SOLS:geoportail_vf`) : type de sol dominant de chaque unité, regroupé en calcaire (calcosol, rendisol, dolomitosol…), acide (alocrisol, podzosol, rankosol, brunisol…) et autre. Environ 9 000 polygones.
+- Le WFS renvoie au plus 5 000 polygones par requête (environ 66 Mo de GeoJSON pour la BD Forêt). Chaque page est rasterisée aussitôt à 50 m ; seul ce résultat est mis en cache (`data/raw/wfs/`).
+- Copernicus DEM (altitude, relief) et ESA WorldCover (cultures, prairies), déjà utilisés aux étapes 2 et 3.
+
+Non retenus pour l'instant :
+- OSO ou Corine Land Cover, qui doublonnent WorldCover ;
+- carte géologique BRGM, remplacée par la carte des sols ;
+- Sentinel-2 (NDVI, NDMI), utile pour l'état de la végétation mais **pas** pour l'humidité du sol.
 
 ## Architecture du modèle
 
-Deux couches combinées :
+**Version en service (étapes 5 et 6, octobre 2026)**, par maille de 1 km :
+
+potentiel = favorabilité d'habitat × saison normale × facteur de la météo actuelle
+
+- **habitat** (`model/habitat.py`) : régression logistique cible / Fungi sur les observations précises. Variables : parts de végétation, sols, cultures, prairies, altitude, relief. Saison et source servent de variables de nuisance, retirées de la carte. Favorabilité bornée à la plage des lieux prospectés (pas d'extrapolation).
+- **saison** (`model/analogues.py: seasonal_level`) : activité normale des Fungi × part normale de la cible, par quinzaine et tranche d'altitude, moyennée sur les 14 jours à venir.
+- **météo** (`model/meteo_classes.py`) : classe de la maille SIM2 selon des seuils simples (`config/modele.yaml`). Facteurs validés hors échantillon : défavorable × 0,75, normale × 1, favorable × 1,2.
+
+L'approche par analogues ci-dessous a été testée (étape 5) puis **écartée pour l'instant** : elle ne bat pas la phénologie seule. Elle reste une piste pour plus tard.
+
+Conception initiale, deux couches combinées :
 
 1. **Habitat favorable (« où »)** : carte statique de favorabilité par maille, construite à partir des observations passées et des variables d'habitat. Une maille de 1 km est un bon point de départ.
 2. **Déclenchement météo (« quand »)** : indice dynamique, calculé chaque jour par maille météo, selon l'approche par analogues.
@@ -118,7 +133,7 @@ Les observations iNaturalist sont des **présences seules** et reflètent l'effo
 ## Structure du dépôt
 
 ```
-config/          zone.yaml (centre, rayon, maille), taxa.yaml (généré), sources.yaml (règles de fusion)
+config/          zone.yaml (centre, rayon, maille), taxa.yaml (généré), sources.yaml (règles de fusion), modele.yaml (réglages des modèles)
 data/raw/        réponses brutes en cache (iNat, météo), non versionnées
 data/processed/  tables nettoyées (parquet), MNT
 data/outputs/    rapports et cartes HTML générés
@@ -129,9 +144,9 @@ src/mushroam/    paquet Python (installé en mode éditable)
   observations.py  fusion des sources, doublons, altitude
   inat/ gbif/    extraction et mise à plat par source
   meteo/         sim2.py (extraction SIM2), features.py (variables décalées)
-  habitat/       dem.py (relief), landcover.py (WorldCover, part de bâti)
-  model/         analogues, favorabilité, combinaison
-  viz/           site.py (site à onglets), explore.py, meteo_page.py, map.py, theme.py
+  habitat/       dem.py (relief), landcover.py (WorldCover, part de bâti), vecteurs.py (BD Forêt, sols), grille.py (1 km)
+  model/         conditions.py (étape 4), analogues.py (écarté), meteo_classes.py, habitat.py, prediction.py
+  viz/           site.py (site à onglets), explore.py, meteo_page.py, prediction_page.py, map.py, theme.py
 notebooks/       exploration
 tests/
 ```
@@ -143,7 +158,7 @@ Les sous-dossiers sont regroupés sous un paquet `mushroam` pour éviter des nom
 - Python 3.11 ou plus récent (installé : 3.14). Environnement `venv` dans `.venv/`, dépendances dans `pyproject.toml`.
   - Installation : `py -3.14 -m venv .venv` puis `.venv/Scripts/python -m pip install -e ".[dev]"`.
   - Tests : `.venv/Scripts/python -m pytest`.
-- Bibliothèques : `requests`, `pandas`, `pyarrow`, `pyyaml`, `numpy`, `rasterio`, `folium`, `plotly` ; à venir : `geopandas`, `xarray`, `scikit-learn`.
+- Bibliothèques : `requests`, `pandas`, `pyarrow`, `pyyaml`, `numpy`, `rasterio`, `folium`, `plotly`, `scikit-learn`.
 - Fonds de carte : **jamais les tuiles `tile.openstreetmap.org`**. Leurs serveurs bloquent les pages ouvertes en `file://` (pas d'en-tête Referer). Utiliser OpenTopoMap, Esri (World Imagery, Light/Dark Gray Canvas) ou un autre fournisseur sans clé qui accepte ce cas.
 - Graphiques : une couleur fixe par entité (`src/mushroam/viz/theme.py`) : iNat bleu, GBIF jaune, coulemelle aqua, bolets orange. Jamais deux échelles sur un même graphique.
 - Système de coordonnées : WGS84 (EPSG:4326) en entrée, Lambert-93 (EPSG:2154) pour les calculs de distance et de surface.
@@ -168,6 +183,12 @@ Paramètres dans `config/sources.yaml`. La carte des observations a une couche (
 .venv/Scripts/python -m mushroam.meteo.features  # variables décalées -> data/processed/meteo_features.parquet
 .venv/Scripts/python -m mushroam.inat.effort     # effort iNat quotidien (tous groupes / Fungi) -> data/processed/inat_effort.parquet
 .venv/Scripts/python -m mushroam.observations    # table unifiée -> data/processed/observations.parquet
+.venv/Scripts/python -m mushroam.habitat.vecteurs   # BD Forêt + sols INRAE (WFS) -> foret_50m.tif, sols_50m.tif (~1 h la 1re fois)
+.venv/Scripts/python -m mushroam.habitat.grille     # grille d'habitat 1 km -> habitat_1km.parquet
+.venv/Scripts/python -m mushroam.model.habitat      # favorabilité + validation spatiale -> habitat_*.parquet
+.venv/Scripts/python -m mushroam.model.meteo_classes  # contrôle des classes météo -> classes_meteo_validation.parquet
+.venv/Scripts/python -m mushroam.model.prediction   # habitat × saison × météo du jour -> prediction_1km.parquet
+.venv/Scripts/python -m mushroam.model.analogues    # (facultatif, piste écartée) -> analogues_validation.parquet
 .venv/Scripts/python -m mushroam.viz.site        # site local -> data/outputs/site/index.html
 ```
 
@@ -195,9 +216,35 @@ Une ligne par observation datée au jour près, dans le rayon. Colonnes clés : 
      - bolets (avant séparation) : poussée **décalée**, part maximale 21 à 35 jours après la pluie (× 1,24) et faible juste après (× 0,87) ; sols plus humides que la normale 15 à 30 jours avant. Après séparation : feuillus plus étalés (pic × 1,32 à 28–35 j), pins très en retrait juste après la pluie (× 0,65) puis × 1,2–1,5 de 21 à 60 jours ;
      - coulemelle : plus précoce, part maximale 7 à 14 jours après la pluie (× 1,42) ; sols plus secs que la normale à J−30 puis remise en eau rapide les 15 derniers jours.
    - Limites : intervalles de confiance approchés et trop étroits (observations groupées par sortie) ; météo de la zone moyennée pour le niveau 1.
-5. Premier modèle par analogues (couche temporelle seule), avec validation par saison mise de côté. Conséquences de l'étape 4 : garder les deux niveaux (activité des Fungi corrigée de l'effort × part de la cible) ; la fenêtre de 0 à 21 jours après l'analogue est trop courte pour les bolets (pic à 3–5 semaines) : la rendre propre à chaque cible.
-6. Ajouter ensuite la couche habitat.
-7. Sortie : **site local à onglets** (`data/outputs/site/index.html`) : Observations (carte puis données), Météo (carte par maille avec choix de variable et de date sur 90 jours, puis données et écarts aux normales), Prédiction (à venir).
+5. ~~Premier modèle par analogues, validé sur saisons mises de côté.~~ Fait, **résultat négatif** (`model/analogues.py`, `config/modele.yaml`).
+   - Méthode : k plus proches situations (6 variables standardisées, ± 30 jours de l'année), observations des analogues dans la fenêtre de poussée de chaque cible. Deux niveaux : activité des Fungi, et part de la cible rapportée à la normale de sa maille. Chaque pli d'années est prédit sans lui.
+   - Résultat : aucune variante ne bat la phénologie seule, ni avec moins de variables, ni avec un autre k (30 à 3 000), ni à l'horizon de 0 à 7 jours. Seules les situations sèches se détectent (× 0,65–0,85). Les effets de l'étape 4 étaient mesurés sans mettre d'années de côté.
+   - **Piste 1, gardée pour plus tard** : une régression simple sur 2 ou 3 variables (jours depuis une forte pluie, SWI par rapport à la normale).
+   - **Piste 2, retenue** : classe météo actuelle par seuils simples (`model/meteo_classes.py`), contrôlée année par année. Sur 0 à 14 jours : défavorable × 0,75 (sous 1 les 8 années 2019–2026) et favorable × 1,20 (au-dessus de 1 les 8 années). Limite : contrôle sur la météo moyenne de la zone, car l'effort iNat n'est connu qu'à cette échelle.
+6. ~~Couche habitat.~~ Fait (`habitat/vecteurs.py`, `habitat/grille.py`, `model/habitat.py`, `model/prediction.py`). Validation par blocs de 20 km (5 plis), AUC hors bloc :
+
+   | Cible | Saison + source | + altitude | + habitat |
+   |---|---|---|---|
+   | Coulemelle | 0,77 | 0,80 | 0,83 |
+   | Bolets des feuillus | 0,70 | 0,71 | 0,72 |
+   | Bolets des pins | 0,65 | 0,71 | 0,78 |
+
+   Effets principaux, quand le milieu passe de 0 à 50 % de la maille :
+   - pins → bolets des pins × 2,7 ;
+   - prairies → coulemelle × 6, plus les lisières (pins, feuillus) ;
+   - forêt mixte et feuillus → bolets des feuillus × 1,5 à 2.
+
+   Le gain des bolets des feuillus est faible : l'essence seule les distingue mal des autres champignons forestiers.
+7. Sortie : **site local à onglets** (`data/outputs/site/index.html`) :
+   - Observations : carte, puis données ;
+   - Météo : carte par maille avec choix de variable et de date sur 90 jours, puis données et écarts aux normales ;
+   - Prédiction : carte à 1 km (potentiel, habitat, saison, classe météo ; avis du dernier jour météo pour les 14 jours suivants), meilleurs secteurs et validations.
+
+Pistes suivantes :
+- piste 1 (régression météo simple) ;
+- effort iNat par sous-zone, pour contrôler la classe météo à l'échelle locale ;
+- relevés de terrain avec absences ;
+- espèces témoins comme signal récent (bolets des feuillus, × 1,5).
 
 ## Questions ouvertes
 
@@ -208,3 +255,5 @@ Décisions prises :
 - Coulemelle : validation en regroupant plusieurs saisons par pli ; fiabilité moindre que pour les bolets, acceptée.
 - Proportions cible / fond calculées par source (iNat, GBIF), puis combinées.
 - Seuil urbain : 30 % de bâti, validé.
+- Prévision par analogues écartée pour l'instant (ne bat pas la phénologie) ; classe météo actuelle par seuils simples retenue (piste 2), régression simple gardée pour plus tard (piste 1).
+- Habitat validé par blocs géographiques de 20 km (le « où »), la météo par années mises de côté (le « quand »).

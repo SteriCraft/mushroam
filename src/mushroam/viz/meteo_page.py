@@ -156,10 +156,10 @@ def meteo_section(f: pd.DataFrame, grid: pd.DataFrame) -> str:
     return "\n".join(r.parts)
 
 
-MAP_TEMPLATE = r"""<!doctype html>
+MAP_HEAD = r"""<!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Carte météo</title>
+<title>__TITLE__</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -183,6 +183,23 @@ select { padding:3px 6px; background:var(--surface); color:var(--text); border:1
 .legend .bar { height:10px; border-radius:3px; margin:6px 0 2px; }
 .legend .ticks { display:flex; justify-content:space-between; color:var(--text-2); font-variant-numeric:tabular-nums; }
 .leaflet-tooltip { font-variant-numeric:tabular-nums; }
+"""
+
+# Fond de carte et cercle de la zone (attend `map`, `D.centre`, `D.rayon_m`, `ATTRIB`).
+BASEMAP_JS = r"""// Fond neutre Esri (gris clair ou foncé selon le thème), sans clé et utilisable depuis un fichier local.
+// Les serveurs OpenStreetMap refusent les pages ouvertes en file:// (pas d'en-tête Referer).
+const dark = matchMedia("(prefers-color-scheme: dark)").matches && document.documentElement.dataset.theme !== "light";
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_" + (dark ? "Dark" : "Light")
+  + "_Gray_Base/MapServer/tile/{z}/{y}/{x}", {maxZoom:16,
+  attribution:'Fond © Esri, HERE, Garmin, © OpenStreetMap' + ATTRIB}).addTo(map);
+// Noms de lieux au-dessus des mailles, sans capter la souris.
+map.createPane("labels"); map.getPane("labels").style.zIndex = 650; map.getPane("labels").style.pointerEvents = "none";
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_" + (dark ? "Dark" : "Light")
+  + "_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {maxZoom:16, pane:"labels"}).addTo(map);
+L.circle(D.centre, {radius:D.rayon_m, color:"#52514e", weight:1.5, fill:false, dashArray:"6 6", interactive:false}).addTo(map);
+"""
+
+MAP_TEMPLATE = MAP_HEAD.replace("__TITLE__", "Carte météo") + r"""
 
 </style></head>
 <body><div id="wrap">
@@ -198,18 +215,8 @@ const D = __DATA__;
 const SEQ = ["#cde2fb","#9ec5f4","#6da7ec","#3987e5","#256abf","#184f95","#0d366b"];
 const DIV = ["#b42c2c","#d65a52","#ec9a8c","#f0efec","#9ec5f4","#3987e5","#184f95"];
 const map = L.map("map", {zoomControl:true}).setView(D.centre, 8);
-// Fond neutre Esri (gris clair ou foncé selon le thème), sans clé et utilisable depuis un fichier local.
-// Les serveurs OpenStreetMap refusent les pages ouvertes en file:// (pas d'en-tête Referer).
-const dark = matchMedia("(prefers-color-scheme: dark)").matches && document.documentElement.dataset.theme !== "light";
-L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_" + (dark ? "Dark" : "Light")
-  + "_Gray_Base/MapServer/tile/{z}/{y}/{x}", {maxZoom:16,
-  attribution:'Fond © Esri, HERE, Garmin, © OpenStreetMap · météo SIM2 Météo-France'}).addTo(map);
-// Noms de lieux au-dessus des mailles, sans capter la souris.
-map.createPane("labels"); map.getPane("labels").style.zIndex = 650; map.getPane("labels").style.pointerEvents = "none";
-L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_" + (dark ? "Dark" : "Light")
-  + "_Gray_Reference/MapServer/tile/{z}/{y}/{x}", {maxZoom:16, pane:"labels"}).addTo(map);
-L.circle(D.centre, {radius:D.rayon_m, color:"#52514e", weight:1.5, fill:false, dashArray:"6 6", interactive:false}).addTo(map);
-const index = Object.fromEntries(D.cells.map((c,i)=>[c,i]));
+const ATTRIB = " · météo SIM2 Météo-France";
+""" + BASEMAP_JS + r"""const index = Object.fromEntries(D.cells.map((c,i)=>[c,i]));
 let v = "swi", t = D.dates.length - 1, lo = 0, hi = 1;
 const sel = document.getElementById("var");
 for (const [k, m] of Object.entries(D.vars)) { const o = document.createElement("option"); o.value=k; o.textContent=m.label; sel.appendChild(o); }
