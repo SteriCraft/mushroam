@@ -146,6 +146,7 @@ src/mushroam/    paquet Python (installé en mode éditable)
   inat/ gbif/    extraction et mise à plat par source
   meteo/         sim2.py (extraction SIM2), features.py (variables décalées)
   habitat/       dem.py (relief), landcover.py (WorldCover, part de bâti), vecteurs.py (BD Forêt, sols), grille.py (1 km)
+  pipeline.py    enchaînement des étapes (quotidien / complet)
   model/         conditions.py (étape 4), analogues.py (écarté), meteo_classes.py, habitat.py, sorties.py, prediction.py
   viz/           site.py (site à onglets), explore.py, meteo_page.py, prediction_page.py, map.py, theme.py
 notebooks/       exploration
@@ -192,7 +193,11 @@ Paramètres dans `config/sources.yaml`. La carte des observations a une couche (
 .venv/Scripts/python -m mushroam.model.prediction   # habitat × saison × météo du jour + probabilité -> prediction_1km.parquet
 .venv/Scripts/python -m mushroam.model.analogues    # (facultatif, piste écartée) -> analogues_validation.parquet
 .venv/Scripts/python -m mushroam.viz.site        # site local -> data/outputs/site/index.html
+.venv/Scripts/python -m mushroam.pipeline [--complet]  # enchaîne les étapes (par défaut : météo, effort, prédiction, site)
 ```
+
+### Publication (GitHub Pages)
+Le workflow `.github/workflows/site.yml` tourne chaque jour à 8 h UTC : mode quotidien de `mushroam.pipeline`, puis publication de `data/outputs/site/` sur GitHub Pages (https://stericraft.github.io/mushroam/). `data/` est gardé d'une exécution à l'autre dans le cache d'Actions (environ 300 Mo). Pipeline complet le lundi, au lancement manuel avec l'option « complet », ou si le cache est vide (premier passage : plus d'une heure).
 
 Les extractions récupèrent **toutes** les Fungi du rayon (tous niveaux de qualité) : fond et cibles viennent de la même requête. `--refresh` retélécharge tout. Sous Windows, préfixer par `PYTHONUTF8=1` si la console affiche mal les accents.
 

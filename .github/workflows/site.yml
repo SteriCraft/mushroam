@@ -1,0 +1,81 @@
+# Met à jour la prédiction chaque matin et publie le site sur GitHub Pages.
+# data/ n'est pas versionné : il est conservé d'une exécution à l'autre dans le cache d'Actions.
+# Pipeline complet le lundi, au lancement manuel avec « complet », ou si le cache est vide.
+name: Site
+
+on:
+  schedule:
+    - cron: "0 8 * * *"  # 8 h UTC, après la mise à jour quotidienne de SIM2
+  workflow_dispatch:
+    inputs:
+      complet:
+        description: "Pipeline complet (extractions, habitat, modèles)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: site
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      PYTHONUTF8: "1"
+      TZ: Europe/Paris
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Installation
+        run: pip install -e .
+
+      - name: Données des exécutions précédentes
+        id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: data
+          key: data-${{ github.run_id }}
+          restore-keys: data-
+
+      - name: Pipeline
+        run: |
+          mode=""
+          if [ -z "${{ steps.cache.outputs.cache-matched-key }}" ] \
+             || [ "${{ inputs.complet }}" = "true" ] || [ "$(date +%u)" = "1" ]; then
+            mode="--complet"
+          fi
+          echo "Mode : ${mode:-quotidien}"
+          python -m mushroam.pipeline $mode
+
+      # Sauvegardé même en cas d'échec, pour ne pas refaire les téléchargements déjà faits.
+      - name: Sauvegarde des données
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data
+          key: data-${{ github.run_id }}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: data/outputs/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

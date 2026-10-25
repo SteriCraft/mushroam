@@ -212,6 +212,12 @@ PRED_TEMPLATE = MAP_HEAD.replace("__TITLE__", "Carte de prédiction") + r"""
 #tip { position:absolute; z-index:1000; pointer-events:none; background:var(--surface); color:var(--text);
   border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:12px; display:none;
   font-variant-numeric:tabular-nums; box-shadow:0 2px 6px rgba(0,0,0,.15); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background:var(--surface); color:var(--text); }
+.leaflet-popup-content { margin:10px 12px; font-size:12px; line-height:1.45; font-variant-numeric:tabular-nums; }
+.route { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; margin-top:8px; }
+.route a.btn { background:#256abf; color:#fff; text-decoration:none; padding:6px 10px; border-radius:6px; font-weight:600; }
+.route a.btn:hover { background:#184f95; }
+.route a.alt { color:var(--text-2); }
 </style></head>
 <body><div id="wrap">
 <div id="ctrl">
@@ -354,18 +360,49 @@ map.fitBounds(D.bounds, {padding:[8, 8]});
 const tip = document.getElementById("tip");
 const [[s0, w0], [n0, e0]] = D.bounds;
 const P0 = L.CRS.EPSG3857.project(L.latLng(n0, w0)), P1 = L.CRS.EPSG3857.project(L.latLng(s0, e0));
-map.on("mousemove", e => {
-  const p = L.CRS.EPSG3857.project(e.latlng);
+function cellAt(latlng){
+  const p = L.CRS.EPSG3857.project(latlng);
   const col = Math.floor((p.x - P0.x) / (P1.x - P0.x) * D.w), row = Math.floor((P0.y - p.y) / (P0.y - P1.y) * D.h);
-  const i = (col >= 0 && col < D.w && row >= 0 && row < D.h) ? IDX[row * D.w + col] : -1;
-  if (i < 0) { tip.style.display = "none"; return; }
+  return (col >= 0 && col < D.w && row >= 0 && row < D.h) ? IDX[row * D.w + col] : -1;
+}
+function infoHtml(i){
   const d = D.data[c];
-  tip.innerHTML = (D.info.commune[i] ? "<b>" + D.info.commune[i] + "</b><br>" : "")
+  return (D.info.commune[i] ? "<b>" + D.info.commune[i] + "</b><br>" : "")
     + D.cibles[c] + " · potentiel <b>" + f2(d.potentiel[i]) + "</b>"
     + " · probabilité <b>" + Math.round(100 * d.probabilite[i]) + " %</b>"
     + "<br>habitat × " + f2(d.habitat[i]) + " · saison " + f2(d.saison[i])
     + "<br>météo " + CATL[D.classe[i]] + " (pluie 30 j : " + D.pluie30[i] + " mm)"
     + "<br>" + D.info.alt[i] + " m · " + D.info.foret[i] + " · sol " + D.info.sol[i];
+}
+// Itinéraire vers le point cliqué. Le lien universel Google Maps ouvre l'application sur smartphone
+// (si elle est installée) et le site sur PC ; sans point de départ, il part de la position actuelle.
+const UA = navigator.userAgent, IOS = /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+const ANDROID = /Android/.test(UA);
+function routeHtml(ll, name){
+  const lat = ll.lat.toFixed(5), lng = ll.lng.toFixed(5);
+  const g = "https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=" + lat + "," + lng;
+  // Autre application d'itinéraire : choix du système (Android) ou Plans (iOS).
+  const other = ANDROID ? "geo:" + lat + "," + lng + "?q=" + lat + "," + lng + "(" + encodeURIComponent(name || "Maille") + ")"
+    : IOS ? "https://maps.apple.com/?daddr=" + lat + "," + lng : null;
+  return '<div class="route"><a class="btn" href="' + g + '" target="_blank" rel="noopener">Itinéraire Google Maps</a>'
+    + (other ? '<a class="alt" href="' + other + '" target="_blank" rel="noopener">autre application</a>' : "")
+    + "</div>";
+}
+// Clic (ou toucher sur smartphone) sur une maille : bulle fixe avec les valeurs et l'itinéraire.
+const popup = L.popup({maxWidth:320, autoPanPadding:[20, 20]});
+let pinned = false;
+map.on("click", e => {
+  const i = cellAt(e.latlng);
+  if (i < 0) { map.closePopup(popup); return; }
+  tip.style.display = "none";
+  popup.setLatLng(e.latlng).setContent(infoHtml(i) + routeHtml(e.latlng, D.info.commune[i])).openOn(map);
+});
+map.on("popupopen", () => { pinned = true; tip.style.display = "none"; });
+map.on("popupclose", () => { pinned = false; });
+map.on("mousemove", e => {
+  const i = pinned ? -1 : cellAt(e.latlng);
+  if (i < 0) { tip.style.display = "none"; return; }
+  tip.innerHTML = infoHtml(i) + '<br><span style="color:var(--muted)">clic : itinéraire</span>';
   tip.style.left = (e.containerPoint.x + 14) + "px"; tip.style.top = (e.containerPoint.y + 14) + "px";
   tip.style.display = "block";
 });
@@ -374,7 +411,7 @@ const opacityInput = document.getElementById("opacity");
 function opacity(){ return 1 - opacityInput.value / 100; }
 opacityInput.oninput = () => { if (overlay) overlay.setOpacity(opacity()); };
 function redraw(){ range(); threshold(); draw(); }
-selC.onchange = () => { c = selC.value; redraw(); };
+selC.onchange = () => { c = selC.value; map.closePopup(popup); redraw(); };
 selL.onchange = () => { layer = selL.value; redraw(); };
 document.getElementById("top").onchange = redraw;
 redraw();
