@@ -87,7 +87,31 @@ SORTIES_CSS = """
   padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
   margin-bottom: 12px; max-width: 720px; }
 .sx-btn-sm { padding: 4px 10px; font-size: .85rem; font-weight: 500; }
+.sx-obs { list-style: none; padding: 0; margin: 12px 0; display: flex; flex-direction: column; gap: 10px; max-width: 720px; }
+.sx-obs > li { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-2); }
+.sx-obs-body { flex: 1 1 240px; display: flex; flex-direction: column; gap: 4px; }
+.sx-obs-body .sx-text { margin: 4px 0; }
+.sx-sci { color: var(--text-2); font-weight: 400; }
+.sx-src { color: var(--muted); }
+.sx-chip-none { color: var(--muted); font-style: italic; padding-right: 10px; }
+.sx-photos { display: flex; flex-wrap: wrap; gap: 6px; }
+.sx-photos:empty { display: none; }
+.sx-thumb { position: relative; display: block; width: 88px; height: 88px; padding: 0; border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden; background: var(--surface); cursor: pointer; }
+.sx-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sx-thumb-x { position: absolute; top: 2px; right: 2px; width: 26px; height: 26px; border-radius: 50%; border: 0;
+  background: rgba(0,0,0,.6); color: #fff; font-size: 1rem; line-height: 1; cursor: pointer; }
+.sx-file { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.sx-file-btn { position: relative; align-self: flex-start; }
+.sx-map { height: 260px; max-width: 720px; border: 1px solid var(--border); border-radius: 10px; margin: 8px 0; }
+.sx-map-pick { height: 240px; margin: 4px 0; }
+.sx-lightbox { padding: 0; border: 0; background: transparent; max-width: 96vw; max-height: 96vh; }
+.sx-lightbox::backdrop { background: rgba(0,0,0,.85); }
+.sx-lightbox img { display: block; max-width: 96vw; max-height: 88vh; object-fit: contain; }
+.sx-lightbox a { display: block; text-align: center; color: #fff; padding: 8px; }
 """
+LEAFLET = "https://unpkg.com/leaflet@1.9.4/dist/leaflet"
 PB_SDK = "https://cdn.jsdelivr.net/npm/pocketbase@0.28.1/dist/pocketbase.umd.js"
 
 TABS_JS = """
@@ -119,7 +143,8 @@ def page(obs_html: str, met_html: str, cond_html: str, pred_html: str, generated
     return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mushroam</title>
-<style>{CSS}{TABS_CSS}{SORTIES_CSS}</style><script src="plotly.min.js"></script></head>
+<style>{CSS}{TABS_CSS}{SORTIES_CSS}</style><script src="plotly.min.js"></script>
+<link rel="stylesheet" href="{LEAFLET}.css"></head>
 <body>
 <header class="site"><div class="in">
 <h1>Mushroam</h1>
@@ -166,6 +191,7 @@ Réservé aux comptes inscrits (code d'invitation). Une sortie n'est visible que
 </main>
 {THEME_JS % json.dumps(LIGHT_TO_DARK)}{TABS_JS}
 <script src="{PB_SDK}"></script>
+<script src="{LEAFLET}.js"></script>
 <script src="sorties.js"></script>
 </body></html>"""
 
