@@ -18,7 +18,7 @@ from typing import Callable
 import requests
 
 USER_AGENT = "mushroam/0.1 (projet personnel de prevision de champignons)"
-MAX_RETRIES = 5
+MAX_RETRIES = 7
 
 
 def cache_key(path: str, params: dict) -> str:
@@ -49,21 +49,32 @@ class CachedClient:
         self._last_request = time.monotonic()
 
     def _fetch(self, path: str, params: dict) -> dict:
+        last_error = ""
         for attempt in range(MAX_RETRIES):
+            if attempt:
+                # 5, 10, 20, 40, 80, 160 s : environ 5 min en tout, pour passer
+                # une panne passagère de l'API.
+                wait = 5 * 2 ** (attempt - 1)
+                print(f"    reprise dans {wait} s ({last_error})", flush=True)
+                time.sleep(wait)
             self._throttle()
             try:
                 resp = self.session.get(f"{self.api_root}{path}", params=params, timeout=90)
-            except requests.ConnectionError:
-                time.sleep(2 ** (attempt + 1))
+            except requests.RequestException as e:  # connexion, délai dépassé, réponse tronquée
+                last_error = type(e).__name__
                 continue
             self.n_http += 1
             if resp.status_code == 200:
-                return resp.json()
+                try:
+                    return resp.json()
+                except ValueError:  # réponse incomplète ou page d'erreur HTML
+                    last_error = "JSON invalide"
+                    continue
             if resp.status_code == 429 or resp.status_code >= 500:
-                time.sleep(2 ** (attempt + 1))  # 2, 4, 8, 16, 32 s
+                last_error = f"HTTP {resp.status_code}"
                 continue
             resp.raise_for_status()
-        raise RuntimeError(f"Échec après {MAX_RETRIES} tentatives : {path} {params}")
+        raise RuntimeError(f"Échec après {MAX_RETRIES} tentatives ({last_error}) : {path} {params}")
 
     def get(
         self,
